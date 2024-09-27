@@ -4,7 +4,7 @@ import { RouterModule, Routes } from '@angular/router';
 const routes: Routes = [
   {
     path: 'map',
-    loadChildren: () => import('./features/map/map.module').then(m => m.MapModule)
+    loadChildren: () => import('./map.module').then(m => m.MapModule)
   },
   { path: '', redirectTo: '/map', pathMatch: 'full' },
 ];

@@ -1,18 +1,14 @@
 import { Injectable } from '@angular/core';
-import { Observable, of } from 'rxjs';
-import * as d3 from 'd3';
+import { Observable } from 'rxjs';
+import { HttpClient } from '@angular/common/http';
 
 @Injectable({
   providedIn: 'root'
 })
 export class MapService {
-
-  constructor() { }
+  constructor(private http: HttpClient) { }
 
   getMapData(): Observable<any> {
-    // For now, return a mock object
-    return of(/*mock map data*/);
+    return this.http.get('assets/data/ITA_adm2.json');
   }
-
-  // More map methods will be added here
 }
