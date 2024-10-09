@@ -1,1 +1,16 @@
-<p>layer-control works!</p>
+<div class="layer-control">
+  <h3>Base Layers</h3>
+  <div *ngFor="let layer of baseLayers | keyvalue">
+    <input type="radio" [id]="layer.key" name="baseLayer" [value]="layer.key" 
+           [checked]="layer.key === activeBaseLayer"
+           (change)="onBaseLayerChange(layer.key)">
+    <label [for]="layer.key">{{ layer.key }}</label>
+  </div>
+  <h3>Overlays</h3>
+  <div *ngFor="let overlay of overlays | keyvalue">
+    <input type="checkbox" [id]="overlay.key" 
+           [checked]="isOverlayChecked(overlay.key)" 
+           (change)="onOverlayChange(overlay.key, $event)">
+    <label [for]="overlay.key">{{ overlay.key }}</label>
+  </div>
+</div>

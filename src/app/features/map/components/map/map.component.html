@@ -1,2 +1,7 @@
-<div id="map" style="height: 600px;"></div>
-<app-layer-control [map]="map" [baseLayers]="baseLayers" [overlays]="overlays"></app-layer-control>
+<div #map style="height: 600px;"></div>
+<app-layer-control 
+  [baseLayers]="baseLayers" 
+  [overlays]="overlays"
+  (baseLayerChange)="onBaseLayerChange($event)"
+  (overlayChange)="onOverlayChange($event)">
+</app-layer-control>
