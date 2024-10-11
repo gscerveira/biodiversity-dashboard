@@ -42,7 +42,7 @@ export class MapComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   private initMap(): void {
-    this.map = L.map(this.mapContainer.nativeElement, {
+    this.map = L.map('map-container', {
       center: [42.674749, 12.572149],
       zoom: 6,
       zoomControl: true,
