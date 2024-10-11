@@ -1,6 +1,8 @@
 import { Component, ViewChild, ElementRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { FileUploadService } from '../../../../core/services/file-upload.service';
+import * as d3 from 'd3';
 
 @Component({
   selector: 'app-file-upload',
@@ -16,6 +18,8 @@ export class FileUploadComponent {
   selectedFiles: File[] = [];
   fileTypes = ['Geojson(.json)', 'Zipfile (.zip) containing .shp, shx and .dbf files', 'GeoTiff (.tif, .tiff)'];
   selectedFileType = '';
+
+  constructor(private fileUploadService: FileUploadService) {}
 
   onDragOver(event: DragEvent) {
     event.preventDefault();
@@ -48,11 +52,70 @@ export class FileUploadComponent {
 
   handleFiles(files: FileList) {
     this.selectedFiles = Array.from(files);
-    // Logic for file processing will go here
-    console.log('Selected files:', this.selectedFiles);
+    this.processFiles();
   }
 
   openFileDialog() {
     this.fileInput.nativeElement.click();
+  }
+
+  private processFiles() {
+    if (this.selectedFiles.length > 0) {
+      this.selectedFiles.forEach(file => {
+        const reader = new FileReader();
+        reader.onload = (e: any) => {
+          const result = e.target.result;
+          switch (this.selectedFileType) {
+            case 'Geojson(.json)':
+              this.processGeoJson(result);
+              break;
+            case 'Zipfile (.zip) containing .shp, shx and .dbf files':
+              this.processShapefile(file);
+              break;
+            case 'GeoTiff (.tif, .tiff)':
+              this.processGeoTiff(file);
+              break;
+            default:
+              console.warn('Unsupported file type');
+          }
+        };
+        if (this.selectedFileType === 'Geojson(.json)') {
+          reader.readAsText(file);
+        } else {
+          reader.readAsArrayBuffer(file);
+        }
+      });
+    }
+  }
+
+  private processGeoJson(content: string) {
+    try {
+      const geoJson = JSON.parse(content);
+      this.fileUploadService.updateProcessedData(geoJson);
+    } catch (error) {
+      console.error('Error processing GeoJSON:', error);
+    }
+  }
+
+  private processShapefile(file: File) {
+    this.fileUploadService.processShapefile(file).subscribe(
+      (geoJson) => {
+        this.fileUploadService.updateProcessedData(geoJson);
+      },
+      (error) => {
+        console.error('Error processing Shapefile:', error);
+      }
+    );
+  }
+
+  private processGeoTiff(file: File) {
+    this.fileUploadService.processGeoTiff(file).subscribe(
+      (geoJson) => {
+        this.fileUploadService.updateProcessedData(geoJson);
+      },
+      (error) => {
+        console.error('Error processing GeoTIFF:', error);
+      }
+    );
   }
 }

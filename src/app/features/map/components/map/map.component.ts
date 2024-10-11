@@ -1,25 +1,44 @@
-import { Component, OnInit, AfterViewInit, ViewChild, ElementRef } from '@angular/core';
+import { Component, OnInit, AfterViewInit, ViewChild, ElementRef, OnDestroy } from '@angular/core';
 import * as L from 'leaflet';
 import { MapService } from '../../../../core/services/map.service';
+import { FileUploadService } from '../../../../core/services/file-upload.service';
+import { Subscription } from 'rxjs';
 
 @Component({
   selector: 'app-map',
   templateUrl: './map.component.html',
   styleUrls: ['./map.component.scss']
 })
-export class MapComponent implements OnInit, AfterViewInit {
+export class MapComponent implements OnInit, AfterViewInit, OnDestroy {
   @ViewChild('map') mapContainer!: ElementRef;
-  
+
   private map!: L.Map;
   private baseLayers: { [key: string]: L.TileLayer } = {};
   private overlays: { [key: string]: L.LayerGroup } = {};
+  private layerControl!: L.Control.Layers;
+  private subscription: Subscription;
 
-  constructor(private mapService: MapService) {}
+  constructor(
+    private mapService: MapService,
+    private fileUploadService: FileUploadService
+  ) {
+    this.subscription = this.fileUploadService.processedData$.subscribe(data => {
+      if (data) {
+        this.addGeoJsonLayer(data);
+      }
+    });
+  }
 
-  ngOnInit() {}
+  ngOnInit() { }
 
   ngAfterViewInit() {
     this.initMap();
+  }
+
+  ngOnDestroy() {
+    if (this.subscription) {
+      this.subscription.unsubscribe();
+    }
   }
 
   private initMap(): void {
@@ -33,6 +52,7 @@ export class MapComponent implements OnInit, AfterViewInit {
     this.addBaseLayers();
     this.addOverlays();
     this.addLayerControl();
+    this.addFileUploadControl();
   }
 
   private addBaseLayers(): void {
@@ -66,42 +86,112 @@ export class MapComponent implements OnInit, AfterViewInit {
     });
   }
 
+  private addLayerControl(): void {
+    this.layerControl = L.control.layers(this.baseLayers, this.overlays).addTo(this.map);
+  }
+
+  private addFileUploadControl(): void {
+    const FileUploadControl = L.Control.extend({
+      onAdd: (map: L.Map) => {
+        const container = L.DomUtil.create('div', 'leaflet-bar leaflet-control leaflet-control-custom');
+        container.innerHTML = `
+          <input type="file" id="file-input" style="display: none;" multiple>
+          <button id="upload-button" style="width: 100px; height: 30px;">Upload File</button>
+        `;
+
+        L.DomEvent.on(container, 'click', L.DomEvent.stopPropagation);
+
+        setTimeout(() => {
+          const uploadButton = document.getElementById('upload-button');
+          const fileInput = document.getElementById('file-input') as HTMLInputElement;
+
+          if (uploadButton && fileInput) {
+            uploadButton.onclick = () => {
+              fileInput.click();
+            };
+
+            fileInput.onchange = (event) => {
+              const files = (event.target as HTMLInputElement).files;
+              if (files && files.length > 0) {
+                const file = files[0];
+                if (file.name.endsWith('.json')) {
+                  this.processGeoJson(file);
+                } else if (file.name.endsWith('.zip')) {
+                  this.fileUploadService.processShapefile(file).subscribe(
+                    (geoJson) => this.addGeoJsonLayer(geoJson),
+                    (error) => console.error('Error processing Shapefile:', error)
+                  );
+                } else if (file.name.endsWith('.tif') || file.name.endsWith('.tiff')) {
+                  this.processGeoTiff(file);
+                } else {
+                  console.warn('Unsupported file type');
+                }
+              }
+            };
+          }
+        }, 0);
+
+        return container;
+      }
+    });
+
+    new FileUploadControl({ position: 'topright' }).addTo(this.map);
+  }
+
+  private processGeoJson(file: File) {
+    const reader = new FileReader();
+    reader.onload = (e: any) => {
+      try {
+        const geoJson = JSON.parse(e.target.result);
+        this.addGeoJsonLayer(geoJson);
+      } catch (error) {
+        console.error('Error processing GeoJSON:', error);
+      }
+    };
+    reader.readAsText(file);
+  }
+
   private onEachFeature(feature: any, layer: L.Layer): void {
     if (feature.properties && feature.properties.NAME_2) {
       layer.bindTooltip(feature.properties.NAME_2, { permanent: false, direction: 'center' });
-      layer.on({
-        mouseover: (e) => this.highlightFeature(e),
-        mouseout: (e) => this.resetHighlight(e),
-        click: (e) => this.zoomToFeature(e)
-      });
     }
   }
 
-  private highlightFeature(e: L.LeafletEvent): void {
-    const layer = e.target;
-    layer.setStyle({
-      weight: 5,
-      color: '#666',
-      dashArray: '',
-      fillOpacity: 0.7
+  private addGeoJsonLayer(geoJsonData: any) {
+    const geoJsonLayer = L.geoJSON(geoJsonData, {
+      style: () => ({
+        color: '#ff7800',
+        weight: 2,
+        opacity: 0.65
+      }),
+      onEachFeature: this.onEachFeature.bind(this)
     });
+
+    this.overlays['Uploaded Data'] = L.layerGroup([geoJsonLayer]);
+    this.overlays['Uploaded Data'].addTo(this.map);
+    this.map.fitBounds(geoJsonLayer.getBounds());
+
+    // Update the layer control
+    this.layerControl.addOverlay(this.overlays['Uploaded Data'], 'Uploaded Data');
   }
 
-  private resetHighlight(e: L.LeafletEvent): void {
-    const layer = e.target;
-    layer.setStyle({
-      weight: 2,
-      color: '#ff7800',
-      dashArray: '',
-      fillOpacity: 0.7
-    });
+  private processGeoTiff(file: File) {
+    this.fileUploadService.processGeoTiff(file).subscribe(
+      (result) => {
+        this.addGeoTiffLayer(result.imageUrl, result.bounds);
+      },
+      (error) => {
+        console.error('Error processing GeoTIFF:', error);
+      }
+    );
   }
 
-  private zoomToFeature(e: L.LeafletEvent): void {
-    this.map.fitBounds(e.target.getBounds());
-  }
-
-  private addLayerControl(): void {
-    L.control.layers(this.baseLayers, this.overlays).addTo(this.map);
+  private addGeoTiffLayer(imageUrl: string, bounds: L.LatLngBoundsExpression) {
+    const imageOverlay = L.imageOverlay(imageUrl, bounds);
+    this.overlays['GeoTIFF'] = L.layerGroup([imageOverlay]);
+    this.overlays['GeoTIFF'].addTo(this.map);
+    this.map.fitBounds(bounds);
+    // Update the layer control
+    this.layerControl.addOverlay(this.overlays['GeoTIFF'], 'GeoTIFF');
   }
 }

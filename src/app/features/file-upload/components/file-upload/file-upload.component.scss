@@ -1,0 +1,43 @@
+.file-upload-container {
+  max-width: 600px;
+  margin: 20px auto;
+}
+
+.file-upload-area {
+  border: 2px dashed #ccc;
+  border-radius: 5px;
+  padding: 20px;
+  text-align: center;
+  cursor: pointer;
+  transition: background-color 0.3s;
+
+  &.drag-over {
+    background-color: #f0f0f0;
+  }
+}
+
+.file-type-selection {
+  margin-top: 20px;
+
+  select {
+    width: 100%;
+    padding: 10px;
+    border-radius: 5px;
+  }
+}
+
+.selected-files {
+  margin-top: 20px;
+
+  ul {
+    list-style-type: none;
+    padding: 0;
+  }
+
+  li {
+    background-color: #f0f0f0;
+    margin-bottom: 5px;
+    padding: 5px 10px;
+    border-radius: 3px;
+  }
+}

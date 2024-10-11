@@ -1,1 +1,25 @@
-<p>file-upload works!</p>
+<div class="file-upload-container">
+  <div class="file-upload-area"
+       [class.drag-over]="dragOver"
+       (dragover)="onDragOver($event)"
+       (dragleave)="onDragLeave($event)"
+       (drop)="onDrop($event)"
+       (click)="openFileDialog()">
+    <p>Drag and Drop or Click to Select Files</p>
+  </div>
+  <input #fileInput type="file" (change)="onFileSelected($event)" style="display: none;" multiple>
+  
+  <div class="file-type-selection">
+    <select [(ngModel)]="selectedFileType">
+      <option value="">Select file type</option>
+      <option *ngFor="let type of fileTypes" [value]="type">{{ type }}</option>
+    </select>
+  </div>
+
+  <div *ngIf="selectedFiles.length > 0" class="selected-files">
+    <h3>Selected Files:</h3>
+    <ul>
+      <li *ngFor="let file of selectedFiles">{{ file.name }}</li>
+    </ul>
+  </div>
+</div>
