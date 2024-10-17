@@ -1,4 +1,4 @@
-import { Component, OnInit, AfterViewInit, ViewChild, ElementRef, OnDestroy } from '@angular/core';
+import { Component, OnInit, AfterViewInit, ViewChild, ElementRef, OnDestroy, signal } from '@angular/core';
 import * as L from 'leaflet';
 import { MapService } from '../../../../core/services/map.service';
 import { FileUploadService } from '../../../../core/services/file-upload.service';
@@ -17,6 +17,12 @@ export class MapComponent implements OnInit, AfterViewInit, OnDestroy {
   private overlays: { [key: string]: L.LayerGroup } = {};
   private layerControl!: L.Control.Layers;
   private subscription: Subscription;
+  private geoJsonLayer: L.GeoJSON | null = null;
+  private infoControl!: L.Control;
+  private infoContent = signal('Hover over a feature');
+
+  columns: string[] = [];
+  selectedColumn: string = '';
 
   constructor(
     private mapService: MapService,
@@ -25,8 +31,12 @@ export class MapComponent implements OnInit, AfterViewInit, OnDestroy {
     this.subscription = this.fileUploadService.processedData$.subscribe(data => {
       if (data) {
         this.addGeoJsonLayer(data);
+        this.extractColumns(data);
       }
     });
+
+    // Initialize the info control with the current content
+    this.updateInfoControl();
   }
 
   ngOnInit() { }
@@ -53,6 +63,7 @@ export class MapComponent implements OnInit, AfterViewInit, OnDestroy {
     this.addOverlays();
     this.addLayerControl();
     this.addFileUploadControl();
+    this.addInfoControl();
   }
 
   private addBaseLayers(): void {
@@ -152,27 +163,78 @@ export class MapComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   private onEachFeature(feature: any, layer: L.Layer): void {
-    if (feature.properties && feature.properties.NAME_2) {
-      layer.bindTooltip(feature.properties.NAME_2, { permanent: false, direction: 'center' });
-    }
+    layer.on({
+      mouseover: (e: L.LeafletMouseEvent) => {
+        const layer = e.target;
+        layer.setStyle({
+          weight: 5,
+          color: '#666',
+          dashArray: '',
+          fillOpacity: 0.7
+        });
+        if (!L.Browser.ie && !L.Browser.opera && !L.Browser.edge) {
+          layer.bringToFront();
+        }
+        this.updateInfoControl(layer.feature.properties);
+      },
+      mouseout: (e: L.LeafletMouseEvent) => {
+        const layer = e.target;
+        this.geoJsonLayer?.resetStyle(layer);
+        this.updateInfoControl();
+      },
+      click: (e: L.LeafletMouseEvent) => {
+        this.map.fitBounds(e.target.getBounds());
+      }
+    });
   }
 
   private addGeoJsonLayer(geoJsonData: any) {
-    const geoJsonLayer = L.geoJSON(geoJsonData, {
-      style: () => ({
-        color: '#ff7800',
-        weight: 2,
-        opacity: 0.65
-      }),
-      onEachFeature: this.onEachFeature.bind(this)
+    if (this.geoJsonLayer) {
+      this.map.removeLayer(this.geoJsonLayer);
+    }
+
+    this.geoJsonLayer = L.geoJSON(geoJsonData, {
+      style: (feature) => this.styleFeature(feature),
+      onEachFeature: (feature, layer) => this.onEachFeature(feature, layer)
     });
 
-    this.overlays['Uploaded Data'] = L.layerGroup([geoJsonLayer]);
+    this.overlays['Uploaded Data'] = L.layerGroup([this.geoJsonLayer]);
     this.overlays['Uploaded Data'].addTo(this.map);
-    this.map.fitBounds(geoJsonLayer.getBounds());
+    this.map.fitBounds(this.geoJsonLayer.getBounds());
 
     // Update the layer control
     this.layerControl.addOverlay(this.overlays['Uploaded Data'], 'Uploaded Data');
+
+    // Extract columns and create column selection control
+    this.extractColumns(geoJsonData);
+    this.addColumnSelectionControl();
+  }
+
+  private styleFeature(feature: any): L.PathOptions {
+    if (this.selectedColumn && feature.properties[this.selectedColumn]) {
+      const value = feature.properties[this.selectedColumn];
+      return {
+        fillColor: this.getColor(value),
+        weight: 2,
+        opacity: 1,
+        color: 'white',
+        dashArray: '3',
+        fillOpacity: 0.7
+      };
+    }
+    return {
+      color: '#ff7800',
+      weight: 2,
+      opacity: 0.65
+    };
+  }
+
+  private getColor(value: any): string {
+    // Implement a color scale based on the value
+    // This is a simple example, you might want to use a more sophisticated color scale
+    const colors = ['#FFEDA0', '#FED976', '#FEB24C', '#FD8D3C', '#FC4E2A', '#E31A1C', '#BD0026', '#800026'];
+    const index = Math.floor(Math.random() * colors.length);
+    return colors[index];
   }
 
   private processGeoTiff(file: File) {
@@ -193,5 +255,107 @@ export class MapComponent implements OnInit, AfterViewInit, OnDestroy {
     this.map.fitBounds(bounds);
     // Update the layer control
     this.layerControl.addOverlay(this.overlays['GeoTIFF'], 'GeoTIFF');
+  }
+
+  private highlightFeature(e: L.LeafletMouseEvent) {
+    const layer = e.target;
+    layer.setStyle({
+      weight: 5,
+      color: '#666',
+      dashArray: '',
+      fillOpacity: 0.7
+    });
+    layer.bringToFront();
+    this.updateInfoControl(layer.feature.properties);
+  }
+
+  private resetHighlight(e: L.LeafletMouseEvent) {
+    if (this.geoJsonLayer) {
+      this.geoJsonLayer.resetStyle(e.target);
+    }
+    this.updateInfoControl();
+  }
+
+  private zoomToFeature(e: L.LeafletMouseEvent) {
+    this.map.fitBounds(e.target.getBounds());
+  }
+
+  private updateInfoControl(props?: any): void {
+    if (!this.map) {
+      console.warn('Map is not initialized yet.');
+      return;
+    }
+    
+    let content = '<h4>Feature Information</h4>';
+    if (props) {
+      for (const [key, value] of Object.entries(props)) {
+        content += `<b>${key}</b>: ${value}<br>`;
+      }
+    } else {
+      content = 'Hover over a feature';
+    }
+
+    this.infoContent.set(content);
+
+    // Update the info control directly
+    const infoControlContainer = this.map.getContainer().querySelector('.info');
+    if (infoControlContainer) {
+      infoControlContainer.innerHTML = this.infoContent();
+    }
+  }
+
+  private extractColumns(geoJsonData: any) {
+    if (geoJsonData.features && geoJsonData.features.length > 0) {
+      this.columns = Object.keys(geoJsonData.features[0].properties);
+    }
+  }
+
+  onColumnSelect(event: Event): void {
+    const selectElement = event.target as HTMLSelectElement;
+    this.selectedColumn = selectElement.value;
+    this.updateMapStyles();
+  }
+
+  private addInfoControl(): void {
+    const container = L.DomUtil.create('div', 'info');
+
+    const InfoControl = L.Control.extend({
+      options: {
+        position: 'bottomleft'
+      },
+      onAdd: (map: L.Map) => {
+        return container;
+      }
+    });
+
+    new InfoControl().addTo(this.map);
+
+    // Set the initial content of the info control
+    container.innerHTML = `<h4>Feature Information</h4>${this.infoContent()}`;
+  }
+
+  private updateMapStyles(): void {
+    if (this.geoJsonLayer) {
+      this.geoJsonLayer.setStyle((feature) => this.styleFeature(feature));
+    }
+  }
+
+  private addColumnSelectionControl(): void {
+    const ColumnSelectionControl = L.Control.extend({
+      onAdd: (map: L.Map) => {
+        const container = L.DomUtil.create('div', 'leaflet-bar leaflet-control leaflet-control-custom');
+        const select = L.DomUtil.create('select', 'column-select', container);
+        select.innerHTML = '<option value="">Select a column</option>' +
+          this.columns.map(column => `<option value="${column}">${column}</option>`).join('');
+
+        L.DomEvent.on(select, 'change', (e: Event) => {
+          this.onColumnSelect(e);
+        });
+
+        return container;
+      }
+    });
+
+    new ColumnSelectionControl({ position: 'topright' }).addTo(this.map);
   }
 }

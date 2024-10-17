@@ -1,1 +1,9 @@
-<div id="map-container" class="map-container"></div>
+<div class="map-container">
+  <div id="map-container"></div>
+  <div class="column-select">
+    <select (change)="onColumnSelect($event)">
+      <option value="">Select a column</option>
+      <option *ngFor="let column of columns" [value]="column">{{ column }}</option>
+    </select>
+  </div>
+</div>
