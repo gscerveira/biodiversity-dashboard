@@ -24,6 +24,10 @@ export class MapComponent implements OnInit, AfterViewInit, OnDestroy {
   columns: string[] = [];
   selectedColumn: string = '';
 
+  private colorScale: any;
+  private valueRange: [number, number] = [0, 0];
+  private featureColors: Map<string, string> = new Map();
+
   constructor(
     private mapService: MapService,
     private fileUploadService: FileUploadService
@@ -56,7 +60,8 @@ export class MapComponent implements OnInit, AfterViewInit, OnDestroy {
       center: [42.674749, 12.572149],
       zoom: 6,
       zoomControl: true,
-      scrollWheelZoom: true
+      scrollWheelZoom: true,
+      renderer: L.canvas()
     });
 
     this.addBaseLayers();
@@ -195,17 +200,20 @@ export class MapComponent implements OnInit, AfterViewInit, OnDestroy {
 
     this.geoJsonLayer = L.geoJSON(geoJsonData, {
       style: (feature) => this.styleFeature(feature),
-      onEachFeature: (feature, layer) => this.onEachFeature(feature, layer)
-    });
+      onEachFeature: (feature, layer) => this.onEachFeature(feature, layer),
+      coordsToLatLng: (coords: any) => {
+        return L.latLng(
+          Number(coords[1].toFixed(4)),
+          Number(coords[0].toFixed(4))
+        );
+      }
+    }).addTo(this.map);
 
     this.overlays['Uploaded Data'] = L.layerGroup([this.geoJsonLayer]);
     this.overlays['Uploaded Data'].addTo(this.map);
     this.map.fitBounds(this.geoJsonLayer.getBounds());
 
-    // Update the layer control
     this.layerControl.addOverlay(this.overlays['Uploaded Data'], 'Uploaded Data');
-
-    // Extract columns and create column selection control
     this.extractColumns(geoJsonData);
     this.addColumnSelectionControl();
   }
@@ -213,27 +221,47 @@ export class MapComponent implements OnInit, AfterViewInit, OnDestroy {
   private styleFeature(feature: any): L.PathOptions {
     if (this.selectedColumn && feature.properties[this.selectedColumn]) {
       const value = feature.properties[this.selectedColumn];
+      const featureId = feature.properties.id || JSON.stringify(feature.properties);
+      
+      // Get existing color or generate new one
+      let color = this.featureColors.get(featureId);
+      if (!color) {
+        color = this.getColor(value);
+        this.featureColors.set(featureId, color);
+      }
+      
       return {
-        fillColor: this.getColor(value),
+        fillColor: color,
         weight: 2,
         opacity: 1,
-        color: 'white',
+        color: '#666',
         dashArray: '3',
         fillOpacity: 0.7
       };
     }
     return {
-      color: '#ff7800',
+      color: '#6b8e23',  // Default olive green color
       weight: 2,
       opacity: 0.65
     };
   }
 
-  private getColor(value: any): string {
-    // Implement a color scale based on the value
-    // This is a simple example, you might want to use a more sophisticated color scale
-    const colors = ['#FFEDA0', '#FED976', '#FEB24C', '#FD8D3C', '#FC4E2A', '#E31A1C', '#BD0026', '#800026'];
-    const index = Math.floor(Math.random() * colors.length);
+  private getColor(value: number): string {
+    // Environmental/Geospatial color scheme
+    const colors = [
+      '#1a9850',  // Dark green
+      '#66bd63',  // Light green
+      '#a6d96a',  // Yellow-green
+      '#d9ef8b',  // Light yellow-green
+      '#fee08b',  // Light yellow
+      '#fdae61',  // Light orange
+      '#f46d43',  // Orange
+      '#d73027'   // Red
+    ];
+
+    // Calculate the position in the color range
+    const normalizedValue = (value - this.valueRange[0]) / (this.valueRange[1] - this.valueRange[0]);
+    const index = Math.min(Math.floor(normalizedValue * (colors.length - 1)), colors.length - 1);
     return colors[index];
   }
 
@@ -313,7 +341,12 @@ export class MapComponent implements OnInit, AfterViewInit, OnDestroy {
   onColumnSelect(event: Event): void {
     const selectElement = event.target as HTMLSelectElement;
     this.selectedColumn = selectElement.value;
-    this.updateMapStyles();
+    this.featureColors.clear(); // Clear existing color mappings
+    if (this.geoJsonLayer) {
+      const geoJsonData = this.geoJsonLayer.toGeoJSON();
+      this.calculateValueRange(geoJsonData);
+      this.updateMapStyles();
+    }
   }
 
   private addInfoControl(): void {
@@ -357,5 +390,18 @@ export class MapComponent implements OnInit, AfterViewInit, OnDestroy {
     });
 
     new ColumnSelectionControl({ position: 'topright' }).addTo(this.map);
+  }
+
+  private calculateValueRange(geoJsonData: any): void {
+    if (this.selectedColumn && geoJsonData.features) {
+      const values = geoJsonData.features
+        .map((f: any) => parseFloat(f.properties[this.selectedColumn]))
+        .filter((v: number) => !isNaN(v));
+      
+      this.valueRange = [
+        Math.min(...values),
+        Math.max(...values)
+      ];
+    }
   }
 }
