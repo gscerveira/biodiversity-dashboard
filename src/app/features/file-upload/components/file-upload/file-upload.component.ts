@@ -59,6 +59,15 @@ export class FileUploadComponent {
     this.fileInput.nativeElement.click();
   }
 
+  /**
+   * Handles different geospatial file formats with specific processing requirements:
+   * - GeoJSON: Direct parsing for vector data
+   * - Shapefiles: Must be processed as ZIP due to multiple required files (.shp, .dbf, .shx)
+   * - GeoTIFF: Requires special handling for raster data visualization
+   * 
+   * File type detection is based on extension to provide immediate feedback
+   * before attempting more expensive processing operations.
+   */
   private processFiles() {
     if (this.selectedFiles.length > 0) {
       this.selectedFiles.forEach(file => {

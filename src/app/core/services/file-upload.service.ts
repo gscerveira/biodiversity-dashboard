@@ -32,6 +32,12 @@ export class FileUploadService {
     });
   }
 
+  /**
+   * Processes GeoTIFF files by converting them to a web-friendly format.
+   * GeoTIFF data needs to be transformed into an RGBA format that browsers can display,
+   * while preserving the geographic bounds information for proper map overlay positioning.
+   * Single-band raster data is converted to grayscale for visualization.
+   */
   processGeoTiff(file: File): Observable<any> {
     return new Observable(observer => {
       const reader = new FileReader();
