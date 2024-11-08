@@ -52,3 +52,26 @@
   position: absolute;
   bottom: 50px;  // Adjust this value as needed
 }
+
+.control-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  background: white;
+  padding: 5px;
+  border-radius: 4px;
+  box-shadow: 0 1px 5px rgba(0,0,0,0.65);
+}
+
+.control-buttons button {
+  width: 100%;
+  padding: 5px;
+  cursor: pointer;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  background: white;
+  
+  &:hover {
+    background: #f0f0f0;
+  }
+}

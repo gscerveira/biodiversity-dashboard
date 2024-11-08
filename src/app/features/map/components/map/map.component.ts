@@ -3,6 +3,7 @@ import * as L from 'leaflet';
 import { MapService } from '../../../../core/services/map.service';
 import { FileUploadService } from '../../../../core/services/file-upload.service';
 import { Subscription } from 'rxjs';
+import { StatisticsComponent } from '../statistics/statistics.component';
 
 @Component({
   selector: 'app-map',
@@ -11,6 +12,7 @@ import { Subscription } from 'rxjs';
 })
 export class MapComponent implements OnInit, AfterViewInit, OnDestroy {
   @ViewChild('map') mapContainer!: ElementRef;
+  @ViewChild(StatisticsComponent) statisticsComponent!: StatisticsComponent;
 
   private map!: L.Map;
   private baseLayers: { [key: string]: L.TileLayer } = {};
@@ -112,7 +114,10 @@ export class MapComponent implements OnInit, AfterViewInit, OnDestroy {
         const container = L.DomUtil.create('div', 'leaflet-bar leaflet-control leaflet-control-custom');
         container.innerHTML = `
           <input type="file" id="file-input" style="display: none;" multiple>
-          <button id="upload-button" style="width: 100px; height: 30px;">Upload File</button>
+          <div class="control-buttons">
+            <button id="upload-button" style="width: 100px; height: 30px; margin-bottom: 5px;">Upload File</button>
+            <button id="statistics-button" style="width: 100px; height: 30px;">Statistics</button>
+          </div>
         `;
 
         L.DomEvent.on(container, 'click', L.DomEvent.stopPropagation);
@@ -120,6 +125,7 @@ export class MapComponent implements OnInit, AfterViewInit, OnDestroy {
         setTimeout(() => {
           const uploadButton = document.getElementById('upload-button');
           const fileInput = document.getElementById('file-input') as HTMLInputElement;
+          const statisticsButton = document.getElementById('statistics-button');
 
           if (uploadButton && fileInput) {
             uploadButton.onclick = () => {
@@ -139,10 +145,14 @@ export class MapComponent implements OnInit, AfterViewInit, OnDestroy {
                   );
                 } else if (file.name.endsWith('.tif') || file.name.endsWith('.tiff')) {
                   this.processGeoTiff(file);
-                } else {
-                  console.warn('Unsupported file type');
                 }
               }
+            };
+          }
+
+          if (statisticsButton) {
+            statisticsButton.onclick = () => {
+              this.showStatistics();
             };
           }
         }, 0);
@@ -404,4 +414,21 @@ export class MapComponent implements OnInit, AfterViewInit, OnDestroy {
       ];
     }
   }
+
+  private showStatistics(): void {
+    if (this.geoJsonLayer) {
+      const geoJsonData = this.geoJsonLayer.toGeoJSON();
+      // Update the statistics component with the current data
+      if (this.statisticsComponent) {
+        this.statisticsComponent.data = geoJsonData;
+        this.statisticsComponent.columns = this.columns;
+        this.statisticsComponent.showModal = true;
+      }
+    }
+  }
+
+  get currentGeoJsonData(): any {
+    return this.geoJsonLayer?.toGeoJSON() || null;
+  }
 }
+

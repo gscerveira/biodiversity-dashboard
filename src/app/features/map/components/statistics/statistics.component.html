@@ -1,0 +1,18 @@
+<div class="statistics-modal" *ngIf="showModal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h2>Area Statistics</h2>
+      <button class="close-button" (click)="showModal = false">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="column-select">
+        <select [(ngModel)]="selectedColumn">
+          <option value="">Select column to group by</option>
+          <option *ngFor="let column of columns" [value]="column">{{ column }}</option>
+        </select>
+        <button (click)="calculateAreaStatistics()">Apply</button>
+      </div>
+      <div id="pie-chart"></div>
+    </div>
+  </div>
+</div> 
