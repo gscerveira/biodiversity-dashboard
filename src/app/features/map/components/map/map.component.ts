@@ -48,6 +48,7 @@ export class MapComponent implements OnInit, AfterViewInit, OnDestroy {
   private valueRange: [number, number] = [0, 0];
   private featureColors: Map<string, string> = new Map();
   private excludedProperties: Set<string> = new Set();
+  private originalGeoJsonData: any = null;
 
   constructor(
     private mapService: MapService,
@@ -229,6 +230,9 @@ export class MapComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   private addGeoJsonLayer(geoJsonData: any) {
+    // Store the original GeoJSON data
+    this.originalGeoJsonData = geoJsonData;
+
     if (this.geoJsonLayer) {
       this.map.removeLayer(this.geoJsonLayer);
     }
@@ -419,9 +423,8 @@ export class MapComponent implements OnInit, AfterViewInit, OnDestroy {
     const selectElement = event.target as HTMLSelectElement;
     this.selectedColumn = selectElement.value;
     this.featureColors.clear(); // Clear existing color mappings
-    if (this.geoJsonLayer) {
-      const geoJsonData = this.geoJsonLayer.toGeoJSON();
-      this.calculateValueRange(geoJsonData);
+    if (this.originalGeoJsonData) {
+      this.calculateValueRange(this.originalGeoJsonData);
       this.updateMapStyles();
     }
   }
@@ -448,12 +451,14 @@ export class MapComponent implements OnInit, AfterViewInit, OnDestroy {
     const layer = this.geoJsonLayer;
     if (!layer || !this.isVectorGrid(layer)) return;
     
-    const features = layer.toGeoJSON().features as GeoJSONFeature[];
-    features.forEach((feature: GeoJSONFeature) => {
-      const featureId = this.getFeatureId(feature.properties);
-      const style = this.styleFeature(feature);
-      layer.setFeatureStyle(featureId, style);
-    });
+    // Use originalGeoJsonData instead of trying to convert VectorGrid back to GeoJSON
+    if (this.originalGeoJsonData && this.originalGeoJsonData.features) {
+        this.originalGeoJsonData.features.forEach((feature: GeoJSONFeature) => {
+            const featureId = this.getFeatureId(feature.properties);
+            const style = this.styleFeature(feature);
+            layer.setFeatureStyle(featureId, style);
+        });
+    }
   }
 
   private addColumnSelectionControl(): void {
@@ -493,19 +498,19 @@ export class MapComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   private showStatistics(): void {
-    if (this.geoJsonLayer) {
-      const geoJsonData = this.geoJsonLayer.toGeoJSON();
-      // Update the statistics component with the current data
-      if (this.statisticsComponent) {
-        this.statisticsComponent.data = geoJsonData;
-        this.statisticsComponent.columns = this.columns;
-        this.statisticsComponent.showModal = true;
-      }
+    // Use originalGeoJsonData instead of trying to convert VectorGrid back to GeoJSON
+    if (this.originalGeoJsonData) {
+        // Update the statistics component with the current data
+        if (this.statisticsComponent) {
+            this.statisticsComponent.data = this.originalGeoJsonData;
+            this.statisticsComponent.columns = this.columns;
+            this.statisticsComponent.showModal = true;
+        }
     }
   }
 
   get currentGeoJsonData(): any {
-    return this.geoJsonLayer?.toGeoJSON() || null;
+    return this.originalGeoJsonData || null;
   }
 
   private showPropertySelectionPopup(geoJsonData: any): void {
