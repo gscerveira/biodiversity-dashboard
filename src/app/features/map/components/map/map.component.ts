@@ -239,7 +239,7 @@ export class MapComponent implements OnInit, AfterViewInit, OnDestroy {
     });
   }
 
-  private addGeoJsonLayer(geoJsonData: any) {
+  private addGeoJsonLayer(geoJsonData: any, addControls: boolean = true) {
     // Store the original GeoJSON data
     this.originalGeoJsonData = geoJsonData;
 
@@ -329,8 +329,10 @@ export class MapComponent implements OnInit, AfterViewInit, OnDestroy {
     this.overlays['Uploaded Data'] = L.layerGroup([this.geoJsonLayer as any]);
     this.layerControl.addOverlay(this.overlays['Uploaded Data'], 'Uploaded Data');
     
-    this.extractColumns(geoJsonData);
-    this.addColumnSelectionControl();
+    if (addControls) {
+      this.extractColumns(geoJsonData);
+      this.addColumnSelectionControl();
+    }
   }
 
   private styleFeature(feature: any): L.PathOptions {
@@ -467,7 +469,7 @@ export class MapComponent implements OnInit, AfterViewInit, OnDestroy {
       if (this.geoJsonLayer) {
         this.map.removeLayer(this.geoJsonLayer);
       }
-      this.addGeoJsonLayer(this.originalGeoJsonData);
+      this.addGeoJsonLayer(this.originalGeoJsonData, false);
     }
   }
 
