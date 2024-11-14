@@ -4,6 +4,24 @@ import { MapService } from '../../../../core/services/map.service';
 import { FileUploadService } from '../../../../core/services/file-upload.service';
 import { Subscription } from 'rxjs';
 import { StatisticsComponent } from '../statistics/statistics.component';
+import 'leaflet.vectorgrid';
+
+declare module 'leaflet' {
+  export interface VectorGrid extends GridLayer {
+    setFeatureStyle(id: string, style: PathOptions): this;
+    resetFeatureStyle(id: string): this;
+    toGeoJSON(): any;
+  }
+}
+
+interface GeoJSONFeature {
+  type: string;
+  properties: any;
+  geometry: {
+    type: string;
+    coordinates: any[];
+  };
+}
 
 @Component({
   selector: 'app-map',
@@ -19,7 +37,7 @@ export class MapComponent implements OnInit, AfterViewInit, OnDestroy {
   private overlays: { [key: string]: L.LayerGroup } = {};
   private layerControl!: L.Control.Layers;
   private subscription: Subscription;
-  private geoJsonLayer: L.GeoJSON | null = null;
+  private geoJsonLayer: L.VectorGrid | null = null;
   private infoControl!: L.Control;
   private infoContent = signal('Hover over a feature');
 
@@ -182,12 +200,15 @@ export class MapComponent implements OnInit, AfterViewInit, OnDestroy {
     layer.on({
       mouseover: (e: L.LeafletMouseEvent) => {
         const layer = e.target;
-        layer.setStyle({
-          weight: 5,
-          color: '#666',
-          dashArray: '',
-          fillOpacity: 0.7
-        });
+        if (this.geoJsonLayer && this.isVectorGrid(this.geoJsonLayer)) {
+          const featureId = this.getFeatureId(layer.feature.properties);
+          this.geoJsonLayer.setFeatureStyle(featureId, {
+            weight: 5,
+            color: '#666',
+            dashArray: '',
+            fillOpacity: 0.7
+          });
+        }
         if (!L.Browser.ie && !L.Browser.opera && !L.Browser.edge) {
           layer.bringToFront();
         }
@@ -195,7 +216,10 @@ export class MapComponent implements OnInit, AfterViewInit, OnDestroy {
       },
       mouseout: (e: L.LeafletMouseEvent) => {
         const layer = e.target;
-        this.geoJsonLayer?.resetStyle(layer);
+        if (this.geoJsonLayer && this.isVectorGrid(this.geoJsonLayer)) {
+          const featureId = this.getFeatureId(layer.feature.properties);
+          this.geoJsonLayer.resetFeatureStyle(featureId);
+        }
         this.updateInfoControl();
       },
       click: (e: L.LeafletMouseEvent) => {
@@ -209,22 +233,61 @@ export class MapComponent implements OnInit, AfterViewInit, OnDestroy {
       this.map.removeLayer(this.geoJsonLayer);
     }
 
-    this.geoJsonLayer = L.geoJSON(geoJsonData, {
-      style: (feature) => this.styleFeature(feature),
-      onEachFeature: (feature, layer) => this.onEachFeature(feature, layer),
-      coordsToLatLng: (coords: any) => {
-        return L.latLng(
-          Number(coords[1].toFixed(4)),
-          Number(coords[0].toFixed(4))
-        );
+    // Create vector grid slicer options
+    const vectorGridOptions = {
+      maxZoom: 18,
+      tolerance: 3,
+      debug: 0,
+      rendererFactory: L.canvas.tile,
+      vectorTileLayerStyles: {
+        sliced: {
+          fillColor: '#6b8e23',
+          fillOpacity: 0.7,
+          weight: 2,
+          opacity: 1,
+          color: '#666',
+          dashArray: '3'
+        }
+      },
+      interactive: true,
+      getFeatureId: (feature: any) => {
+        return feature.properties.id || JSON.stringify(feature.properties);
       }
-    }).addTo(this.map);
+    } as any;
 
-    this.overlays['Uploaded Data'] = L.layerGroup([this.geoJsonLayer]);
-    this.overlays['Uploaded Data'].addTo(this.map);
-    this.map.fitBounds(this.geoJsonLayer.getBounds());
+    // Create the vector grid layer and add to map
+    this.geoJsonLayer = L.vectorGrid.slicer(geoJsonData, vectorGridOptions)
+      .on('mouseover', (e: any) => {
+        const properties = e.layer.properties;
+        this.updateInfoControl(properties);
+        
+        // Apply hover style
+        if (e.layer.properties) {
+          const featureId = this.getFeatureId(e.layer.properties);
+          this.geoJsonLayer?.setFeatureStyle(featureId, {
+            weight: 5,
+            color: '#666',
+            fillOpacity: 0.9
+          });
+        }
+      })
+      .on('mouseout', (e: any) => {
+        if (e.layer.properties) {
+          const featureId = this.getFeatureId(e.layer.properties);
+          this.geoJsonLayer?.resetFeatureStyle(featureId);
+        }
+        this.updateInfoControl();
+      })
+      .addTo(this.map);
 
+    // Fit bounds and update controls
+    const bounds = L.geoJSON(geoJsonData).getBounds();
+    this.map.fitBounds(bounds);
+    
+    // Wrap VectorGrid in a LayerGroup for the overlays
+    this.overlays['Uploaded Data'] = L.layerGroup([this.geoJsonLayer as any]);
     this.layerControl.addOverlay(this.overlays['Uploaded Data'], 'Uploaded Data');
+    
     this.extractColumns(geoJsonData);
     this.addColumnSelectionControl();
   }
@@ -309,8 +372,9 @@ export class MapComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   private resetHighlight(e: L.LeafletMouseEvent) {
-    if (this.geoJsonLayer) {
-      this.geoJsonLayer.resetStyle(e.target);
+    if (this.geoJsonLayer && this.isVectorGrid(this.geoJsonLayer)) {
+      const featureId = this.getFeatureId(e.target.feature.properties);
+      this.geoJsonLayer.resetFeatureStyle(featureId);
     }
     this.updateInfoControl();
   }
@@ -381,9 +445,15 @@ export class MapComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   private updateMapStyles(): void {
-    if (this.geoJsonLayer) {
-      this.geoJsonLayer.setStyle((feature) => this.styleFeature(feature));
-    }
+    const layer = this.geoJsonLayer;
+    if (!layer || !this.isVectorGrid(layer)) return;
+    
+    const features = layer.toGeoJSON().features as GeoJSONFeature[];
+    features.forEach((feature: GeoJSONFeature) => {
+      const featureId = this.getFeatureId(feature.properties);
+      const style = this.styleFeature(feature);
+      layer.setFeatureStyle(featureId, style);
+    });
   }
 
   private addColumnSelectionControl(): void {
@@ -497,6 +567,14 @@ export class MapComponent implements OnInit, AfterViewInit, OnDestroy {
     });
 
     return container;
+  }
+
+  private isVectorGrid(layer: any): layer is L.VectorGrid {
+    return layer && 'setFeatureStyle' in layer && 'resetFeatureStyle' in layer;
+  }
+
+  private getFeatureId(properties: any): string {
+    return properties.id || JSON.stringify(properties);
   }
 }
 
