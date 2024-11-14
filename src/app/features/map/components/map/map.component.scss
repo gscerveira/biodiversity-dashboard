@@ -127,3 +127,19 @@
     }
   }
 }
+
+.leaflet-control-custom {
+    background: white;
+    padding: 5px;
+    border-radius: 4px;
+    box-shadow: 0 1px 5px rgba(0,0,0,0.4);
+
+    select {
+        width: 150px;
+        padding: 4px;
+        border: 1px solid #ccc;
+        border-radius: 3px;
+        background: white;
+        font-size: 14px;
+    }
+}
