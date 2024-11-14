@@ -29,6 +29,7 @@ export class MapComponent implements OnInit, AfterViewInit, OnDestroy {
   private colorScale: any;
   private valueRange: [number, number] = [0, 0];
   private featureColors: Map<string, string> = new Map();
+  private excludedProperties: Set<string> = new Set();
 
   constructor(
     private mapService: MapService,
@@ -169,7 +170,7 @@ export class MapComponent implements OnInit, AfterViewInit, OnDestroy {
     reader.onload = (e: any) => {
       try {
         const geoJson = JSON.parse(e.target.result);
-        this.addGeoJsonLayer(geoJson);
+        this.showPropertySelectionPopup(geoJson);
       } catch (error) {
         console.error('Error processing GeoJSON:', error);
       }
@@ -327,7 +328,9 @@ export class MapComponent implements OnInit, AfterViewInit, OnDestroy {
     let content = '<h4>Feature Information</h4>';
     if (props) {
       for (const [key, value] of Object.entries(props)) {
-        content += `<b>${key}</b>: ${value}<br>`;
+        if (!this.excludedProperties.has(key)) {
+          content += `<b>${key}</b>: ${value}<br>`;
+        }
       }
     } else {
       content = 'Hover over a feature';
@@ -335,7 +338,6 @@ export class MapComponent implements OnInit, AfterViewInit, OnDestroy {
 
     this.infoContent.set(content);
 
-    // Update the info control directly
     const infoControlContainer = this.map.getContainer().querySelector('.info');
     if (infoControlContainer) {
       infoControlContainer.innerHTML = this.infoContent();
@@ -344,7 +346,8 @@ export class MapComponent implements OnInit, AfterViewInit, OnDestroy {
 
   private extractColumns(geoJsonData: any) {
     if (geoJsonData.features && geoJsonData.features.length > 0) {
-      this.columns = Object.keys(geoJsonData.features[0].properties);
+      this.columns = Object.keys(geoJsonData.features[0].properties)
+        .filter(col => !this.excludedProperties.has(col));
     }
   }
 
@@ -384,12 +387,16 @@ export class MapComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   private addColumnSelectionControl(): void {
-    const ColumnSelectionControl = L.Control.extend({
+    const PropertySelectionControl = L.Control.extend({
       onAdd: (map: L.Map) => {
         const container = L.DomUtil.create('div', 'leaflet-bar leaflet-control leaflet-control-custom');
         const select = L.DomUtil.create('select', 'column-select', container);
-        select.innerHTML = '<option value="">Select a column</option>' +
-          this.columns.map(column => `<option value="${column}">${column}</option>`).join('');
+        
+        // Get only the non-excluded properties
+        const availableProperties = this.columns.filter(col => !this.excludedProperties.has(col));
+        
+        select.innerHTML = '<option value="">Select a property</option>' +
+          availableProperties.map(prop => `<option value="${prop}">${prop}</option>`).join('');
 
         L.DomEvent.on(select, 'change', (e: Event) => {
           this.onColumnSelect(e);
@@ -399,7 +406,7 @@ export class MapComponent implements OnInit, AfterViewInit, OnDestroy {
       }
     });
 
-    new ColumnSelectionControl({ position: 'topright' }).addTo(this.map);
+    new PropertySelectionControl({ position: 'topright' }).addTo(this.map);
   }
 
   private calculateValueRange(geoJsonData: any): void {
@@ -429,6 +436,67 @@ export class MapComponent implements OnInit, AfterViewInit, OnDestroy {
 
   get currentGeoJsonData(): any {
     return this.geoJsonLayer?.toGeoJSON() || null;
+  }
+
+  private showPropertySelectionPopup(geoJsonData: any): void {
+    const center = this.map.getCenter();
+    const popup = L.popup({
+      closeButton: true,
+      closeOnClick: false,
+      maxWidth: 400,
+      className: 'property-selection-popup'
+    })
+      .setLatLng(center)
+      .setContent(this.createPropertySelectionContent(geoJsonData))
+      .openOn(this.map);
+
+    // Prevent popup from closing when clicking inside it
+    const container = popup.getElement();
+    if (container) {
+      L.DomEvent.disableClickPropagation(container);
+    }
+  }
+
+  private createPropertySelectionContent(geoJsonData: any): HTMLElement {
+    const container = L.DomUtil.create('div', 'property-selection-container');
+    const properties = Object.keys(geoJsonData.features[0].properties);
+    
+    container.innerHTML = `
+      <h3>Select Properties to Display</h3>
+      <div class="property-list">
+        ${properties.map(prop => `
+          <div class="property-item">
+            <input type="checkbox" id="prop-${prop}" checked>
+            <label for="prop-${prop}">${prop}</label>
+          </div>
+        `).join('')}
+      </div>
+      <button id="confirm-properties" class="confirm-button">Confirm Selection</button>
+    `;
+
+    setTimeout(() => {
+      const confirmButton = container.querySelector('#confirm-properties');
+      if (confirmButton) {
+        confirmButton.addEventListener('click', () => {
+          const excludedProps = properties.filter(prop => {
+            const checkbox = container.querySelector(`#prop-${prop}`) as HTMLInputElement;
+            return checkbox && !checkbox.checked;
+          });
+          this.excludedProperties = new Set(excludedProps);
+          this.map.closePopup();
+          this.addGeoJsonLayer(geoJsonData);
+          // Remove existing column selection control if it exists
+          const existingControl = document.querySelector('.column-select');
+          if (existingControl) {
+            existingControl.remove();
+          }
+          // Add new column selection control with filtered properties
+          this.addColumnSelectionControl();
+        });
+      }
+    });
+
+    return container;
   }
 }
 
