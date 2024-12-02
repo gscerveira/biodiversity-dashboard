@@ -32,14 +32,15 @@ export class MapComponent implements OnInit, AfterViewInit, OnDestroy {
   @ViewChild('map') mapContainer!: ElementRef;
   @ViewChild(StatisticsComponent) statisticsComponent!: StatisticsComponent;
 
+  // Map instance and layer management
   private map!: L.Map;
-  private baseLayers: { [key: string]: L.TileLayer } = {};
-  private overlays: { [key: string]: L.LayerGroup } = {};
-  private layerControl!: L.Control.Layers;
-  private subscription: Subscription;
-  private geoJsonLayer: L.VectorGrid | null = null;
-  private infoControl!: L.Control;
-  private infoContent = signal('Hover over a feature');
+  private baseLayers: { [key: string]: L.TileLayer } = {};  // Base map layers (e.g., OpenStreetMap, Satellite)
+  private overlays: { [key: string]: L.LayerGroup } = {};   // Optional overlay layers
+  private layerControl!: L.Control.Layers;                  // UI control for layer switching
+  private subscription: Subscription;                       // Subscription for file upload events
+  private geoJsonLayer: L.VectorGrid | null = null;        // Current vector layer displaying GeoJSON data
+  private infoControl!: L.Control;                         // Info panel control
+  private infoContent = signal('Hover over a feature');    // Current content of info panel
 
   columns: string[] = [];
   selectedColumn: string = '';
@@ -281,7 +282,8 @@ export class MapComponent implements OnInit, AfterViewInit, OnDestroy {
       };
     };
 
-    // Create vector grid slicer options
+    // Configure vector grid options for optimal performance and interactivity
+    // Tolerance affects simplification level, maxZoom limits detail level for performance
     const vectorGridOptions = {
       maxZoom: 18,
       tolerance: 3,
@@ -364,7 +366,7 @@ export class MapComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   private getColor(value: number): string {
-    // Environmental/Geospatial color scheme
+    // Color scheme
     const colors = [
       '#1a9850',  // Dark green
       '#66bd63',  // Light green
