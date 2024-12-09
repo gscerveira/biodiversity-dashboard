@@ -1,4 +1,4 @@
-import { Component, Input, OnInit } from '@angular/core';
+import { Component, Input, OnInit, OnChanges, SimpleChanges } from '@angular/core';
 import * as d3 from 'd3';
 
 @Component({
@@ -6,37 +6,63 @@ import * as d3 from 'd3';
   templateUrl: './statistics.component.html',
   styleUrls: ['./statistics.component.scss']
 })
-export class StatisticsComponent implements OnInit {
+export class StatisticsComponent implements OnInit, OnChanges {
   @Input() data: any;
   @Input() columns: string[] = [];
   
   selectedColumn: string = '';
+  selectedNumericalColumn: string = '';
+  numericalColumns: string[] = [];
   showModal: boolean = false;
 
   constructor() {}
 
-  ngOnInit(): void {}
-
-  onColumnSelect(event: Event): void {
-    const select = event.target as HTMLSelectElement;
-    this.selectedColumn = select.value;
+  ngOnInit(): void {
+    this.extractNumericalColumns();
   }
 
-  calculateAreaStatistics(): void {
-    if (!this.data?.features || !this.selectedColumn) return;
+  ngOnChanges(changes: SimpleChanges): void {
+    if (changes['data'] && changes['data'].currentValue) {
+      this.extractNumericalColumns();
+    }
+  }
+
+  private extractNumericalColumns(): void {
+    if (!this.data?.features || !this.data.features[0]) return;
     
-    // Group features by the selected column value and sum their areas
-    const areasByValue = new Map<string, number>();
+    const properties = this.data.features[0].properties;
+    this.numericalColumns = Object.entries(properties)
+      .filter(([_, value]) => {
+        // Check if it's already a number
+        if (typeof value === 'number') return true;
+        
+        // Check if it's a string that can be converted to a valid number
+        if (typeof value === 'string') {
+          const num = parseFloat(value);
+          return !isNaN(num);
+        }
+        
+        return false;
+      })
+      .map(([key]) => key);
+
+    console.log('Numerical columns:', this.numericalColumns); // Debug log
+  }
+
+  calculateStatistics(): void {
+    if (!this.data?.features || !this.selectedColumn || !this.selectedNumericalColumn) return;
+    
+    const valuesByGroup = new Map<string, number>();
     
     this.data.features.forEach((feature: any) => {
-      const value = feature.properties[this.selectedColumn];
-      const area = feature.properties['AREA'] || 0;
+      const groupValue = feature.properties[this.selectedColumn];
+      const numericalValue = parseFloat(feature.properties[this.selectedNumericalColumn]) || 0;
       
-      const currentArea = areasByValue.get(value) || 0;
-      areasByValue.set(value, currentArea + area);
+      const currentValue = valuesByGroup.get(groupValue) || 0;
+      valuesByGroup.set(groupValue, currentValue + numericalValue);
     });
 
-    this.drawPieChart(areasByValue);
+    this.drawPieChart(valuesByGroup);
   }
 
   private drawPieChart(data: Map<string, number>): void {
@@ -135,7 +161,7 @@ export class StatisticsComponent implements OnInit {
       .attr('text-anchor', 'middle')
       .attr('y', -height/2 + 20)
       .attr('class', 'chart-title')
-      .text('Area Distribution')
+      .text(`${this.selectedNumericalColumn} Distribution by ${this.selectedColumn}`)
       .style('font-size', '16px')
       .style('font-weight', 'bold');
   }

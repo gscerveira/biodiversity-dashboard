@@ -1,16 +1,30 @@
 <div class="statistics-modal" *ngIf="showModal">
   <div class="modal-content">
     <div class="modal-header">
-      <h2>Area Statistics</h2>
+      <h2>Statistics</h2>
       <button class="close-button" (click)="showModal = false">×</button>
     </div>
     <div class="modal-body">
       <div class="column-select">
-        <select [(ngModel)]="selectedColumn">
-          <option value="">Select column to group by</option>
-          <option *ngFor="let column of columns" [value]="column">{{ column }}</option>
-        </select>
-        <button (click)="calculateAreaStatistics()">Apply</button>
+        <div class="select-group">
+          <label for="groupBy">Group by:</label>
+          <select id="groupBy" [(ngModel)]="selectedColumn">
+            <option value="">Select column to group by</option>
+            <option *ngFor="let column of columns" [value]="column">{{ column }}</option>
+          </select>
+        </div>
+        
+        <div class="select-group">
+          <label for="calculate">Calculate:</label>
+          <select id="calculate" [(ngModel)]="selectedNumericalColumn">
+            <option value="">Select numerical property</option>
+            <option *ngFor="let column of numericalColumns" [value]="column">{{ column }}</option>
+          </select>
+        </div>
+        
+        <button (click)="calculateStatistics()" [disabled]="!selectedColumn || !selectedNumericalColumn">
+          Apply
+        </button>
       </div>
       <div id="pie-chart"></div>
     </div>
