@@ -15,15 +15,136 @@
   height: 100%;
 }
 
-.column-select {
+.map-controls-container {
   position: absolute;
   top: 10px;
   right: 10px;
   z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.control-group {
   background: white;
-  padding: 5px;
   border-radius: 4px;
   box-shadow: 0 1px 5px rgba(0,0,0,0.65);
+  padding: 8px;
+  
+  &:not(:last-child) {
+    margin-bottom: 5px;
+  }
+}
+
+.control-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+
+  button {
+    width: 100%;
+    padding: 8px 12px;
+    cursor: pointer;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    background: white;
+    font-size: 12px;
+    transition: all 0.2s ease;
+    
+    &:hover {
+      background: #f0f0f0;
+    }
+    
+    &:disabled {
+      background: #f5f5f5;
+      cursor: not-allowed;
+      opacity: 0.7;
+    }
+  }
+}
+
+// Custom styles for Leaflet Draw controls
+.leaflet-draw.leaflet-control {
+  margin: 0;
+  border: none;
+  background: none;
+  box-shadow: none;
+}
+
+.leaflet-draw-toolbar {
+  margin-top: 0 !important;
+  border: none !important;
+  background: none !important;
+
+  a {
+    width: 34px !important;
+    height: 34px !important;
+    line-height: 34px !important;
+    background-color: white !important;
+    border: 1px solid #ccc !important;
+    border-radius: 4px !important;
+    box-shadow: 0 1px 5px rgba(0,0,0,0.2) !important;
+    margin-bottom: 5px !important;
+    text-align: center !important;
+    background-position: center !important;
+    background-repeat: no-repeat !important;
+    background-size: 16px !important;
+
+    &:hover {
+      background-color: #f0f0f0 !important;
+      border-color: #999 !important;
+    }
+
+    &.leaflet-draw-toolbar-button-enabled {
+      background-color: #e6e6e6 !important;
+      border-color: #666 !important;
+    }
+
+    // Specific styles for the rectangle tool
+    &.leaflet-draw-draw-rectangle {
+      background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="%23666" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>') !important;
+    }
+
+    // Specific styles for the delete tool
+    &.leaflet-draw-edit-remove {
+      background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="%23666" stroke-width="2"><path d="M19 7l-3 13h-8l-3-13M8 7V5a2 2 0 012-2h4a2 2 0 012 2v2M21 7H3"/></svg>') !important;
+    }
+  }
+}
+
+.leaflet-draw-actions {
+  left: 36px !important;
+
+  li {
+    a {
+      background: white !important;
+      color: #333 !important;
+      padding: 8px 12px !important;
+      line-height: 1.4 !important;
+      font-size: 12px !important;
+      border-bottom: 1px solid #eee !important;
+
+      &:hover {
+        background-color: #f0f0f0 !important;
+        text-decoration: none !important;
+      }
+    }
+
+    &:last-child a {
+      border-bottom: none !important;
+    }
+  }
+}
+
+.column-select {
+  select {
+    width: 100%;
+    padding: 6px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 12px;
+    margin-top: 5px;
+  }
 }
 
 .info {
@@ -36,43 +157,10 @@
   max-width: 300px;
   max-height: 300px;
   overflow-y: auto;
-}
 
-.info h4 {
-  margin: 0 0 5px;
-  color: #777;
-}
-
-.leaflet-bottom {
-  display: flex;
-  flex-direction: column;
-}
-
-.leaflet-control-container .leaflet-bottom {
-  position: absolute;
-  bottom: 50px;  // Adjust this value as needed
-}
-
-.control-buttons {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-  background: white;
-  padding: 5px;
-  border-radius: 4px;
-  box-shadow: 0 1px 5px rgba(0,0,0,0.65);
-}
-
-.control-buttons button {
-  width: 100%;
-  padding: 5px;
-  cursor: pointer;
-  border: 1px solid #ccc;
-  border-radius: 4px;
-  background: white;
-  
-  &:hover {
-    background: #f0f0f0;
+  h4 {
+    margin: 0 0 5px;
+    color: #777;
   }
 }
 
@@ -126,20 +214,4 @@
       background: #45a049;
     }
   }
-}
-
-.leaflet-control-custom {
-    background: white;
-    padding: 5px;
-    border-radius: 4px;
-    box-shadow: 0 1px 5px rgba(0,0,0,0.4);
-
-    select {
-        width: 150px;
-        padding: 4px;
-        border: 1px solid #ccc;
-        border-radius: 3px;
-        background: white;
-        font-size: 14px;
-    }
 }

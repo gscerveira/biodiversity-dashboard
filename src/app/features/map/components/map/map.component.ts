@@ -1,5 +1,6 @@
 import { Component, OnInit, AfterViewInit, ViewChild, ElementRef, OnDestroy, signal } from '@angular/core';
 import * as L from 'leaflet';
+import 'leaflet-draw';
 import { MapService } from '../../../../core/services/map.service';
 import { FileUploadService } from '../../../../core/services/file-upload.service';
 import { Subscription } from 'rxjs';
@@ -60,6 +61,11 @@ export class MapComponent implements OnInit, AfterViewInit, OnDestroy {
   private featureColors: Map<string, string> = new Map();
   private excludedProperties: Set<string> = new Set();
   private originalGeoJsonData: any = null;
+  private drawnItems: L.FeatureGroup = new L.FeatureGroup();
+  private drawControl!: L.Control.Draw;
+  private currentBox: L.Rectangle | null = null;
+  private isBoxFilterActive = signal(false);
+  private originalFeatures: any[] = [];
 
   constructor(
     private mapService: MapService,
@@ -102,6 +108,7 @@ export class MapComponent implements OnInit, AfterViewInit, OnDestroy {
     this.addLayerControl();
     this.addFileUploadControl();
     this.addInfoControl();
+    this.initializeDrawControls();
   }
 
   private addBaseLayers(): void {
@@ -142,21 +149,32 @@ export class MapComponent implements OnInit, AfterViewInit, OnDestroy {
   private addFileUploadControl(): void {
     const FileUploadControl = L.Control.extend({
       onAdd: (map: L.Map) => {
-        const container = L.DomUtil.create('div', 'leaflet-bar leaflet-control leaflet-control-custom');
-        container.innerHTML = `
+        const container = L.DomUtil.create('div', 'map-controls-container');
+        
+        // Create main controls group
+        const controlsGroup = L.DomUtil.create('div', 'control-group', container);
+        controlsGroup.innerHTML = `
           <input type="file" id="file-input" style="display: none;" multiple>
           <div class="control-buttons">
-            <button id="upload-button" style="width: 100px; height: 30px; margin-bottom: 5px;">Upload File</button>
-            <button id="statistics-button" style="width: 100px; height: 30px;">Statistics</button>
+            <button id="upload-button" class="control-button">
+              <i class="fas fa-upload"></i> Upload File
+            </button>
+            <button id="statistics-button" class="control-button">
+              <i class="fas fa-chart-pie"></i> Statistics
+            </button>
+            <button id="toggle-filter" class="control-button" ${!this.currentBox ? 'disabled' : ''}>
+              ${this.isBoxFilterActive() ? 'Show All' : 'Filter Box'}
+            </button>
           </div>
         `;
 
-        L.DomEvent.on(container, 'click', L.DomEvent.stopPropagation);
+        L.DomEvent.disableClickPropagation(controlsGroup);
 
         setTimeout(() => {
           const uploadButton = document.getElementById('upload-button');
           const fileInput = document.getElementById('file-input') as HTMLInputElement;
           const statisticsButton = document.getElementById('statistics-button');
+          const toggleButton = document.getElementById('toggle-filter');
 
           if (uploadButton && fileInput) {
             uploadButton.onclick = () => {
@@ -184,6 +202,19 @@ export class MapComponent implements OnInit, AfterViewInit, OnDestroy {
           if (statisticsButton) {
             statisticsButton.onclick = () => {
               this.showStatistics();
+            };
+          }
+
+          if (toggleButton) {
+            toggleButton.onclick = () => {
+              if (this.isBoxFilterActive()) {
+                this.isBoxFilterActive.set(false);
+                this.resetFilter();
+              } else {
+                this.isBoxFilterActive.set(true);
+                this.filterDataByBox();
+              }
+              toggleButton.textContent = this.isBoxFilterActive() ? 'Show All' : 'Filter Box';
             };
           }
         }, 0);
@@ -630,6 +661,87 @@ export class MapComponent implements OnInit, AfterViewInit, OnDestroy {
 
   private getFeatureId(properties: any): string {
     return properties.id || JSON.stringify(properties);
+  }
+
+  private initializeDrawControls(): void {
+    this.map.addLayer(this.drawnItems);
+
+    const drawOptions: L.Control.DrawConstructorOptions = {
+      position: 'topright',
+      draw: {
+        polygon: false,
+        circle: false,
+        circlemarker: false,
+        marker: false,
+        polyline: false,
+        rectangle: {
+          shapeOptions: {
+            color: '#97009c',
+            weight: 2,
+            opacity: 0.8,
+            fillOpacity: 0.2
+          }
+        }
+      },
+      edit: {
+        featureGroup: this.drawnItems,
+        remove: true,
+        edit: false
+      }
+    };
+
+    this.drawControl = new L.Control.Draw(drawOptions);
+    
+    // Add draw control after other controls
+    setTimeout(() => {
+      this.map.addControl(this.drawControl);
+    }, 100);
+  }
+
+  private filterDataByBox(): void {
+    if (!this.currentBox || !this.originalGeoJsonData) return;
+
+    const boxBounds = this.currentBox.getBounds();
+    const filteredFeatures = this.originalGeoJsonData.features.filter((feature: any) => {
+      const coordinates = feature.geometry.coordinates;
+      
+      // Handle different geometry types
+      if (feature.geometry.type === 'Point') {
+        return boxBounds.contains(L.latLng(coordinates[1], coordinates[0]));
+      } else if (feature.geometry.type === 'Polygon') {
+        // Check if any point of the polygon is within the box
+        return coordinates[0].some((coord: number[]) => 
+          boxBounds.contains(L.latLng(coord[1], coord[0]))
+        );
+      }
+      return false;
+    });
+
+    const filteredGeoJson = {
+      type: 'FeatureCollection',
+      features: filteredFeatures
+    };
+
+    // Update the map with filtered data
+    this.addGeoJsonLayer(filteredGeoJson, false);
+
+    // Update statistics if component is visible
+    if (this.statisticsComponent && this.statisticsComponent.showModal) {
+      this.statisticsComponent.data = filteredGeoJson;
+      this.statisticsComponent.calculateStatistics();
+    }
+  }
+
+  private resetFilter(): void {
+    if (this.originalGeoJsonData) {
+      this.addGeoJsonLayer(this.originalGeoJsonData, false);
+      
+      // Update statistics if component is visible
+      if (this.statisticsComponent && this.statisticsComponent.showModal) {
+        this.statisticsComponent.data = this.originalGeoJsonData;
+        this.statisticsComponent.calculateStatistics();
+      }
+    }
   }
 }
 
