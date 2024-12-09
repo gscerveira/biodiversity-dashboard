@@ -43,10 +43,10 @@ export class StatisticsComponent implements OnInit {
     // Clear previous chart
     d3.select('#pie-chart').selectAll('*').remove();
 
-    const width = 500;
+    const width = 600;
     const height = 500;
-    const radius = Math.min(width, height) / 3; // Reduced radius to leave more space for labels
-    const labelOffset = 10; // Offset for label lines
+    const radius = Math.min(width, height) / 3;
+    const legendWidth = 150;  // Width reserved for legend
 
     const colorScale = d3.scaleOrdinal(d3.schemeCategory10);
 
@@ -55,7 +55,7 @@ export class StatisticsComponent implements OnInit {
       .attr('width', width)
       .attr('height', height)
       .append('g')
-      .attr('transform', `translate(${width / 2},${height / 2})`);
+      .attr('transform', `translate(${(width - legendWidth) / 2},${height / 2})`);
 
     const pie = d3.pie<[string, number]>()
       .value(d => d[1])
@@ -64,6 +64,12 @@ export class StatisticsComponent implements OnInit {
     const arc = d3.arc<d3.PieArcDatum<[string, number]>>()
       .innerRadius(radius * 0.4)
       .outerRadius(radius);
+
+    // Add tooltip
+    const tooltip = d3.select('#pie-chart')
+      .append('div')
+      .attr('class', 'tooltip')
+      .style('opacity', 0);
 
     // Add slices
     const arcs = svg.selectAll('arc')
@@ -76,41 +82,53 @@ export class StatisticsComponent implements OnInit {
       .attr('d', arc)
       .style('fill', (_, i) => colorScale(i.toString()))
       .style('stroke', 'white')
-      .style('stroke-width', '2px');
+      .style('stroke-width', '2px')
+      .on('mouseover', function(event, d) {
+        const percentage = (d.data[1] / d3.sum(Array.from(data.values())) * 100).toFixed(1);
+        tooltip.transition()
+          .duration(200)
+          .style('opacity', .9);
+        tooltip.html(`${d.data[0]}: ${percentage}%`)
+          .style('left', (event.pageX) + 'px')
+          .style('top', (event.pageY - 28) + 'px');
+        
+        d3.select(this)
+          .style('opacity', 0.7);
+      })
+      .on('mouseout', function() {
+        tooltip.transition()
+          .duration(500)
+          .style('opacity', 0);
+        
+        d3.select(this)
+          .style('opacity', 1);
+      });
 
-    // Add labels
-    arcs.each(function(d) {
-      const centroid = arc.centroid(d);
-      const midAngle = d.startAngle + (d.endAngle - d.startAngle) / 2;
-      const x = centroid[0];
-      const y = centroid[1];
-      
-      // Calculate label position
-      const labelX = x * 1.5;
-      const labelY = y * 1.5;
-      
-      // Draw line from slice to label
-      const g = d3.select(this);
-      g.append('line')
-        .attr('x1', x)
-        .attr('y1', y)
-        .attr('x2', labelX)
-        .attr('y2', labelY)
-        .style('stroke', '#666')
-        .style('stroke-width', '1px');
+    // Add legend
+    const legend = svg.append('g')
+      .attr('class', 'legend')
+      .attr('transform', `translate(${radius * 1.5}, ${-height/3})`);
 
-      // Add label text
-      const percentage = (d.data[1] / d3.sum(Array.from(data.values())) * 100).toFixed(1);
-      const label = `${d.data[0]}: ${percentage}%`;
-      
-      g.append('text')
-        .attr('transform', `translate(${labelX + (midAngle < Math.PI ? labelOffset : -labelOffset)},${labelY})`)
-        .attr('text-anchor', midAngle < Math.PI ? 'start' : 'end')
-        .attr('alignment-baseline', 'middle')
-        .text(label)
-        .style('font-size', '11px')
-        .style('font-family', 'Arial');
-    });
+    const legendItems = legend.selectAll('.legend-item')
+      .data(Array.from(data))
+      .enter()
+      .append('g')
+      .attr('class', 'legend-item')
+      .attr('transform', (_, i) => `translate(0, ${i * 20})`);
+
+    legendItems.append('rect')
+      .attr('width', 15)
+      .attr('height', 15)
+      .style('fill', (_, i) => colorScale(i.toString()));
+
+    legendItems.append('text')
+      .attr('x', 20)
+      .attr('y', 12)
+      .text(d => {
+        const percentage = (d[1] / d3.sum(Array.from(data.values())) * 100).toFixed(1);
+        return `${d[0]} (${percentage}%)`;
+      })
+      .style('font-size', '12px');
 
     // Add title
     svg.append('text')
