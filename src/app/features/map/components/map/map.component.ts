@@ -697,6 +697,8 @@ export class MapComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   private initializeDrawControls(): void {
+    // Create feature group for drawn items and add to map
+    this.drawnItems = new L.FeatureGroup();
     this.map.addLayer(this.drawnItems);
 
     const drawOptions: L.Control.DrawConstructorOptions = {
@@ -713,7 +715,8 @@ export class MapComponent implements OnInit, AfterViewInit, OnDestroy {
             weight: 2,
             opacity: 0.8,
             fillOpacity: 0.2
-          }
+          },
+          metric: true
         }
       },
       edit: {
@@ -724,13 +727,46 @@ export class MapComponent implements OnInit, AfterViewInit, OnDestroy {
     };
 
     this.drawControl = new L.Control.Draw(drawOptions);
-    
-    // Add draw control after other controls
-    setTimeout(() => {
-      this.map.addControl(this.drawControl);
-    }, 100);
+    this.map.addControl(this.drawControl);
 
-    this.map.on('draw:created', (e: any) => {
+    // Handle draw start - disable other layer interactions
+    this.map.on(L.Draw.Event.DRAWSTART, () => {
+      // Disable VectorGrid interactions
+      if (this.geoJsonLayer) {
+        this.map.removeLayer(this.geoJsonLayer);
+      }
+      // Store current overlays state
+      Object.values(this.overlays).forEach(layer => {
+        if (layer.getLayers) {
+          layer.getLayers().forEach((sublayer: any) => {
+            if (sublayer.options) {
+              sublayer.options.interactive = false;
+            }
+          });
+        }
+      });
+    });
+
+    // Handle draw stop - restore layer interactions
+    this.map.on(L.Draw.Event.DRAWSTOP, () => {
+      // Re-enable VectorGrid
+      if (this.geoJsonLayer) {
+        this.map.addLayer(this.geoJsonLayer);
+      }
+      // Restore overlays interaction
+      Object.values(this.overlays).forEach(layer => {
+        if (layer.getLayers) {
+          layer.getLayers().forEach((sublayer: any) => {
+            if (sublayer.options) {
+              sublayer.options.interactive = true;
+            }
+          });
+        }
+      });
+    });
+
+    // Handle creation of new drawn items
+    this.map.on(L.Draw.Event.CREATED, (e: any) => {
       const layer = e.layer;
       
       // Remove previous box if it exists
@@ -746,7 +782,7 @@ export class MapComponent implements OnInit, AfterViewInit, OnDestroy {
       // Add the layer to the feature group
       this.drawnItems.addLayer(layer);
       
-      // Enable the filter button since we now have a box
+      // Enable the filter button
       const toggleButton = document.getElementById('toggle-filter');
       if (toggleButton) {
         toggleButton.removeAttribute('disabled');
@@ -754,12 +790,11 @@ export class MapComponent implements OnInit, AfterViewInit, OnDestroy {
     });
 
     // Handle removal of drawn items
-    this.map.on('draw:deleted', (e: any) => {
+    this.map.on(L.Draw.Event.DELETED, (e: any) => {
       const layers = e.layers;
       layers.eachLayer((layer: any) => {
         if (layer === this.currentBox) {
           this.currentBox = null;
-          // Disable the filter button since we no longer have a box
           const toggleButton = document.getElementById('toggle-filter');
           if (toggleButton) {
             toggleButton.setAttribute('disabled', '');
