@@ -1,11 +1,19 @@
 import { Component, OnInit, AfterViewInit, ViewChild, ElementRef, OnDestroy, signal } from '@angular/core';
 import * as L from 'leaflet';
-import 'leaflet-draw';
 import { MapService } from '../../../../core/services/map.service';
 import { FileUploadService } from '../../../../core/services/file-upload.service';
 import { Subscription } from 'rxjs';
 import { StatisticsComponent } from '../statistics/statistics.component';
 import 'leaflet.vectorgrid';
+import 'leaflet-draw';
+
+declare global {
+  interface Window {
+    type:any;
+  }
+}
+
+window.type = '';
 
 declare module 'leaflet' {
   export interface VectorGrid extends GridLayer {
