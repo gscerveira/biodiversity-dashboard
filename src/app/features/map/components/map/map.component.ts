@@ -7,6 +7,7 @@ import { StatisticsComponent } from '../statistics/statistics.component';
 import 'leaflet.vectorgrid';
 import 'leaflet-draw';
 
+//Workaround for leaflet-draw bug
 declare global {
   interface Window {
     type:any;
@@ -14,6 +15,30 @@ declare global {
 }
 
 window.type = '';
+
+//Workaround for VectorGrid bug (missing fakeStop function)
+L.Canvas.Tile.include({
+	_onClick: function (e:any) {
+		var point = this._map.mouseEventToLayerPoint(e).subtract(this.getOffset());
+		var layer;
+		var clickedLayer;
+
+		for (var id in this._layers) {
+			layer = this._layers[id];
+			if (
+				layer.options.interactive &&
+				layer._containsPoint(point) &&
+				!this._map._draggableMoved(layer)
+			) {
+				clickedLayer = layer;
+			}
+		}
+		if (clickedLayer) {
+                         // offending code used to be right here
+			clickedLayer.fireEvent(e.type, undefined, true);
+		}
+	},
+});
 
 declare module 'leaflet' {
   export interface VectorGrid extends GridLayer {
@@ -704,6 +729,44 @@ export class MapComponent implements OnInit, AfterViewInit, OnDestroy {
     setTimeout(() => {
       this.map.addControl(this.drawControl);
     }, 100);
+
+    this.map.on('draw:created', (e: any) => {
+      const layer = e.layer;
+      
+      // Remove previous box if it exists
+      if (this.currentBox) {
+        this.drawnItems.removeLayer(this.currentBox);
+      }
+      
+      // Store the new box
+      if (e.layerType === 'rectangle') {
+        this.currentBox = layer as L.Rectangle;
+      }
+      
+      // Add the layer to the feature group
+      this.drawnItems.addLayer(layer);
+      
+      // Enable the filter button since we now have a box
+      const toggleButton = document.getElementById('toggle-filter');
+      if (toggleButton) {
+        toggleButton.removeAttribute('disabled');
+      }
+    });
+
+    // Handle removal of drawn items
+    this.map.on('draw:deleted', (e: any) => {
+      const layers = e.layers;
+      layers.eachLayer((layer: any) => {
+        if (layer === this.currentBox) {
+          this.currentBox = null;
+          // Disable the filter button since we no longer have a box
+          const toggleButton = document.getElementById('toggle-filter');
+          if (toggleButton) {
+            toggleButton.setAttribute('disabled', '');
+          }
+        }
+      });
+    });
   }
 
   private filterDataByBox(): void {
