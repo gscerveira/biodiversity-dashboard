@@ -305,11 +305,15 @@ export class MapComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   private addGeoJsonLayer(geoJsonData: any, addControls: boolean = true) {
-    // Store the original GeoJSON data
-    this.originalGeoJsonData = geoJsonData;
+    // Store the original GeoJSON data if this is not a filtered view
+    if (addControls) {
+      this.originalGeoJsonData = geoJsonData;
+    }
 
     if (this.geoJsonLayer) {
       this.map.removeLayer(this.geoJsonLayer);
+      // Remove from layer control if it exists
+      this.layerControl.removeLayer(this.geoJsonLayer);
     }
 
     // Calculate value range if a column is selected
@@ -346,8 +350,7 @@ export class MapComponent implements OnInit, AfterViewInit, OnDestroy {
       };
     };
 
-    // Configure vector grid options for optimal performance and interactivity
-    // Tolerance affects simplification level, maxZoom limits detail level for performance
+    // Configure vector grid options
     const vectorGridOptions = {
       maxZoom: 18,
       tolerance: 3,
@@ -357,20 +360,45 @@ export class MapComponent implements OnInit, AfterViewInit, OnDestroy {
         sliced: (properties: any) => getFeatureStyle(properties)
       },
       interactive: true,
-      getFeatureId: (feature: any) => {
-        return feature.properties.id || JSON.stringify(feature.properties);
-      }
+      getFeatureId: (feature: any) => this.getFeatureId(feature.properties)
     };
 
-    // Create the vector grid layer
-    this.geoJsonLayer = (L.vectorGrid as any).slicer(geoJsonData, vectorGridOptions)
+    // Create and configure the vector grid layer
+    this.geoJsonLayer = (L.vectorGrid as any).slicer(geoJsonData, vectorGridOptions);
+
+    // Always attach event handlers
+    if (this.geoJsonLayer) {
+      this.attachLayerEventHandlers(this.geoJsonLayer, getFeatureStyle);
+    }
+
+    // Add layer to map and layer control
+    if (this.geoJsonLayer) {
+      this.geoJsonLayer.addTo(this.map);
+      const layerName = this.isBoxFilterActive() ? 'Filtered Data' : 'Uploaded Data';
+      this.overlays[layerName] = L.layerGroup([this.geoJsonLayer as any]);
+      this.layerControl.addOverlay(this.overlays[layerName], layerName);
+    }
+
+    // Update bounds
+    const bounds = L.geoJSON(geoJsonData).getBounds();
+    this.map.fitBounds(bounds);
+
+    // Update controls only if needed
+    if (addControls) {
+      this.extractColumns(geoJsonData);
+      this.addColumnSelectionControl();
+    }
+  }
+
+  private attachLayerEventHandlers(layer: L.VectorGrid, getFeatureStyle: (properties: any) => L.PathOptions): void {
+    layer
       .on('mouseover', (e: any) => {
         const properties = e.layer.properties;
         this.updateInfoControl(properties);
         if (properties) {
           const featureId = this.getFeatureId(properties);
           const currentStyle = getFeatureStyle(properties);
-          this.geoJsonLayer?.setFeatureStyle(featureId, {
+          layer.setFeatureStyle(featureId, {
             ...currentStyle,
             weight: 3,
             fillOpacity: 0.9
@@ -381,24 +409,16 @@ export class MapComponent implements OnInit, AfterViewInit, OnDestroy {
         if (e.layer.properties) {
           const featureId = this.getFeatureId(e.layer.properties);
           const currentStyle = getFeatureStyle(e.layer.properties);
-          this.geoJsonLayer?.setFeatureStyle(featureId, currentStyle);
+          layer.setFeatureStyle(featureId, currentStyle);
         }
         this.updateInfoControl();
       })
-      .addTo(this.map);
-
-    // Fit bounds and update controls
-    const bounds = L.geoJSON(geoJsonData).getBounds();
-    this.map.fitBounds(bounds);
-    
-    // Update overlays
-    this.overlays['Uploaded Data'] = L.layerGroup([this.geoJsonLayer as any]);
-    this.layerControl.addOverlay(this.overlays['Uploaded Data'], 'Uploaded Data');
-    
-    if (addControls) {
-      this.extractColumns(geoJsonData);
-      this.addColumnSelectionControl();
-    }
+      .on('click', (e: any) => {
+        if (e.layer.properties) {
+          const bounds = L.geoJSON(e.layer).getBounds();
+          this.map.fitBounds(bounds);
+        }
+      });
   }
 
   private styleFeature(feature: any): L.PathOptions {
@@ -840,6 +860,11 @@ export class MapComponent implements OnInit, AfterViewInit, OnDestroy {
 
   private resetFilter(): void {
     if (this.originalGeoJsonData) {
+      // Remove filtered layer from control if it exists
+      if (this.overlays['Filtered Data']) {
+        this.layerControl.removeLayer(this.overlays['Filtered Data']);
+        delete this.overlays['Filtered Data'];
+      }
       this.addGeoJsonLayer(this.originalGeoJsonData, false);
       
       // Update statistics if component is visible
