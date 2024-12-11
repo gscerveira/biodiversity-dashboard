@@ -215,3 +215,18 @@
     }
   }
 }
+
+.netcdf-options-popup {
+  .leaflet-popup-content {
+    min-width: 250px;
+    
+    .netcdf-options-container {
+      padding: 10px;
+      
+      select {
+        width: 100%;
+        margin: 10px 0;
+      }
+    }
+  }
+}

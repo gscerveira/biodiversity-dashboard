@@ -178,17 +178,13 @@ export class FileUploadComponent {
   private createNetCDFOptionsContent(metadata: NetCDFMetadata, reader: NetCDFReader): HTMLElement {
     const container = document.createElement('div');
     
-    // Create and render the NetCDFOptionsComponent
-    const netcdfOptions = document.createElement('app-netcdf-options');
-    container.appendChild(netcdfOptions);
-
-    // Initialize the component
+    // Create component with proper Angular bootstrapping
     const componentRef = createComponent(NetCDFOptionsComponent, {
       environmentInjector: this.injector,
-      hostElement: netcdfOptions
+      hostElement: container
     });
 
-    // Set inputs and handle outputs
+    // Set metadata and subscribe to options
     componentRef.instance.metadata = metadata;
     componentRef.instance.optionsSelected.subscribe((options: NetCDFDisplayOptions) => {
       this.fileUploadService.createRasterFromNetCDF(reader, options).subscribe({
@@ -200,6 +196,9 @@ export class FileUploadComponent {
         error: (error) => console.error('Error creating raster:', error)
       });
     });
+
+    // Trigger change detection
+    componentRef.changeDetectorRef.detectChanges();
 
     return container;
   }

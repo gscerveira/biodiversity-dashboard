@@ -908,13 +908,14 @@ export class MapComponent implements OnInit, AfterViewInit, OnDestroy {
 
   private createNetCDFOptionsContent(metadata: NetCDFMetadata, reader: NetCDFReader): HTMLElement {
     const container = L.DomUtil.create('div', 'netcdf-options-container');
-    const netcdfOptions = L.DomUtil.create('div', 'netcdf-options', container);
     
+    // Create component with proper Angular bootstrapping
     const componentRef = createComponent(NetCDFOptionsComponent, {
       environmentInjector: this.injector,
-      hostElement: netcdfOptions
+      hostElement: container
     });
 
+    // Set metadata and subscribe to options
     componentRef.instance.metadata = metadata;
     componentRef.instance.optionsSelected.subscribe((options: NetCDFDisplayOptions) => {
       this.fileUploadService.createRasterFromNetCDF(reader, options).subscribe({
@@ -925,6 +926,9 @@ export class MapComponent implements OnInit, AfterViewInit, OnDestroy {
         error: (error) => console.error('Error creating raster:', error)
       });
     });
+
+    // Trigger change detection
+    componentRef.changeDetectorRef.detectChanges();
 
     return container;
   }
