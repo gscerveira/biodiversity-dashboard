@@ -5,12 +5,13 @@ import { MapComponent } from './components/map/map.component';
 import { LayerControlComponent } from './components/layer-control/layer-control.component';
 import { StatisticsComponent } from './components/statistics/statistics.component';
 import { FormsModule } from '@angular/forms';
-
+import { RemoteFilesComponent } from './components/remote-files/remote-files.component';
 @NgModule({
   declarations: [
     MapComponent, 
     LayerControlComponent,
-    StatisticsComponent
+    StatisticsComponent,
+    RemoteFilesComponent
   ],
   imports: [
     CommonModule,

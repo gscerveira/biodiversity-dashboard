@@ -3,6 +3,7 @@ import { BehaviorSubject, Observable, from } from 'rxjs';
 import { map, switchMap } from 'rxjs/operators';
 import shpjs from 'shpjs';
 import * as GeoTIFF from 'geotiff';
+import { ApiService } from './api.service';
 
 @Injectable({
   providedIn: 'root'
@@ -11,7 +12,7 @@ export class FileUploadService {
   private processedDataSubject = new BehaviorSubject<any>(null);
   processedData$ = this.processedDataSubject.asObservable();
 
-  constructor() { }
+  constructor(private apiService: ApiService) {}
 
   updateProcessedData(data: any) {
     this.processedDataSubject.next(data);
@@ -87,6 +88,44 @@ export class FileUploadService {
         }
       };
       reader.readAsArrayBuffer(file);
+    });
+  }
+
+  getRemoteFiles() {
+    return this.apiService.getUploadedFiles().pipe(
+      map(response => response.data)
+    );
+  }
+
+  loadRemoteFile(filename: string) {
+    return this.apiService.downloadFile(filename).pipe(
+      switchMap(blob => {
+        const file = new File([blob], filename);
+        if (filename.endsWith('.json')) {
+          return this.processGeoJsonFile(file);
+        } else if (filename.endsWith('.zip')) {
+          return this.processShapefile(file);
+        } else if (filename.endsWith('.tif') || filename.endsWith('.tiff')) {
+          return this.processGeoTiff(file);
+        }
+        throw new Error('Unsupported file type');
+      })
+    );
+  }
+
+  private processGeoJsonFile(file: File): Observable<any> {
+    return new Observable(observer => {
+      const reader = new FileReader();
+      reader.onload = (e: any) => {
+        try {
+          const geoJson = JSON.parse(e.target.result);
+          observer.next(geoJson);
+          observer.complete();
+        } catch (error) {
+          observer.error(error);
+        }
+      };
+      reader.readAsText(file);
     });
   }
 }
