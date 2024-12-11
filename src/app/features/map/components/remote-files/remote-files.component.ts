@@ -32,7 +32,7 @@ import { ApiFile } from '../../../../core/interfaces/api.interface';
     .remote-files-dropdown {
       position: absolute;
       top: 10px;
-      left: 10px;
+      left: 50px;
       z-index: 1000;
       min-width: 200px;
     }
