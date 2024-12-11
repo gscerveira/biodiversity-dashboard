@@ -1,11 +1,14 @@
-import { Component, OnInit, AfterViewInit, ViewChild, ElementRef, OnDestroy, signal } from '@angular/core';
+import { Component, OnInit, AfterViewInit, ViewChild, ElementRef, OnDestroy, signal, createComponent } from '@angular/core';
 import * as L from 'leaflet';
 import { MapService } from '../../../../core/services/map.service';
-import { FileUploadService } from '../../../../core/services/file-upload.service';
+import { FileUploadService, NetCDFDisplayOptions } from '../../../../core/services/file-upload.service';
 import { Subscription } from 'rxjs';
 import { StatisticsComponent } from '../statistics/statistics.component';
 import 'leaflet.vectorgrid';
 import 'leaflet-draw';
+import { EnvironmentInjector } from '@angular/core';
+import { NetCDFMetadata, NetCDFReader } from '../../../../core/services/file-upload.service';
+import { NetCDFOptionsComponent } from '../netcdf-options/netcdf-options.component';
 
 //Workaround for leaflet-draw bug
 declare global {
@@ -102,7 +105,8 @@ export class MapComponent implements OnInit, AfterViewInit, OnDestroy {
 
   constructor(
     private mapService: MapService,
-    private fileUploadService: FileUploadService
+    private fileUploadService: FileUploadService,
+    private injector: EnvironmentInjector
   ) {
     this.subscription = this.fileUploadService.processedData$.subscribe(data => {
       if (data) {
@@ -135,6 +139,8 @@ export class MapComponent implements OnInit, AfterViewInit, OnDestroy {
       scrollWheelZoom: true,
       renderer: L.canvas()
     });
+
+    this.mapService.setMap(this.map);
 
     this.addBaseLayers();
     this.addOverlays();
@@ -227,6 +233,13 @@ export class MapComponent implements OnInit, AfterViewInit, OnDestroy {
                   );
                 } else if (file.name.endsWith('.tif') || file.name.endsWith('.tiff')) {
                   this.processGeoTiff(file);
+                } else if (file.name.endsWith('.nc')) {
+                  this.fileUploadService.processNetCDF(file).subscribe({
+                    next: ({ metadata, reader }) => {
+                      this.showNetCDFOptionsDialog(metadata, reader);
+                    },
+                    error: (error) => console.error('Error processing NetCDF:', error)
+                  });
                 }
               }
             };
@@ -873,6 +886,47 @@ export class MapComponent implements OnInit, AfterViewInit, OnDestroy {
         this.statisticsComponent.calculateStatistics();
       }
     }
+  }
+
+  private showNetCDFOptionsDialog(metadata: NetCDFMetadata, reader: NetCDFReader): void {
+    const center = this.map.getCenter();
+    const popup = L.popup({
+      closeButton: true,
+      closeOnClick: false,
+      maxWidth: 400,
+      className: 'netcdf-options-popup'
+    })
+      .setLatLng(center)
+      .setContent(this.createNetCDFOptionsContent(metadata, reader))
+      .openOn(this.map);
+
+    const container = popup.getElement();
+    if (container) {
+      L.DomEvent.disableClickPropagation(container);
+    }
+  }
+
+  private createNetCDFOptionsContent(metadata: NetCDFMetadata, reader: NetCDFReader): HTMLElement {
+    const container = L.DomUtil.create('div', 'netcdf-options-container');
+    const netcdfOptions = L.DomUtil.create('div', 'netcdf-options', container);
+    
+    const componentRef = createComponent(NetCDFOptionsComponent, {
+      environmentInjector: this.injector,
+      hostElement: netcdfOptions
+    });
+
+    componentRef.instance.metadata = metadata;
+    componentRef.instance.optionsSelected.subscribe((options: NetCDFDisplayOptions) => {
+      this.fileUploadService.createRasterFromNetCDF(reader, options).subscribe({
+        next: (rasterData) => {
+          this.addGeoTiffLayer(rasterData.imageUrl, rasterData.bounds);
+          this.map.closePopup();
+        },
+        error: (error) => console.error('Error creating raster:', error)
+      });
+    });
+
+    return container;
   }
 }
 

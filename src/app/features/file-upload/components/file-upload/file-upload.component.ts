@@ -1,8 +1,14 @@
-import { Component, ViewChild, ElementRef } from '@angular/core';
+import { Component, ViewChild, ElementRef, EnvironmentInjector } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { FileUploadService } from '../../../../core/services/file-upload.service';
+import { FileUploadService, NetCDFMetadata } from '../../../../core/services/file-upload.service';
 import * as d3 from 'd3';
+import { NetCDFReader } from 'netcdfjs';
+import { createComponent } from '@angular/core';
+import { NetCDFOptionsComponent } from '../../../map/components/netcdf-options/netcdf-options.component';
+import { NetCDFDisplayOptions } from '../../../../core/services/file-upload.service';
+import * as L from 'leaflet';
+import { MapService } from '../../../../core/services/map.service';
 
 @Component({
   selector: 'app-file-upload',
@@ -16,10 +22,14 @@ export class FileUploadComponent {
   
   dragOver = false;
   selectedFiles: File[] = [];
-  fileTypes = ['Geojson(.json)', 'Zipfile (.zip) containing .shp, shx and .dbf files', 'GeoTiff (.tif, .tiff)'];
+  fileTypes = ['Geojson(.json)', 'Zipfile (.zip) containing .shp, shx and .dbf files', 'GeoTiff (.tif, .tiff)', 'NetCDF (.nc)'];
   selectedFileType = '';
 
-  constructor(private fileUploadService: FileUploadService) {}
+  constructor(
+    private fileUploadService: FileUploadService,
+    private mapService: MapService,
+    private injector: EnvironmentInjector
+  ) {}
 
   onDragOver(event: DragEvent) {
     event.preventDefault();
@@ -64,6 +74,7 @@ export class FileUploadComponent {
    * - GeoJSON: Direct parsing for vector data
    * - Shapefiles: Must be processed as ZIP due to multiple required files (.shp, .dbf, .shx)
    * - GeoTIFF: Requires special handling for raster data visualization
+   * - NetCDF: Requires special handling for netCDF data visualization
    * 
    * File type detection is based on extension to provide immediate feedback
    * before attempting more expensive processing operations.
@@ -84,12 +95,17 @@ export class FileUploadComponent {
             case 'GeoTiff (.tif, .tiff)':
               this.processGeoTiff(file);
               break;
+            case 'NetCDF (.nc)':
+              this.processNetCDF(file);
+              break;
             default:
               console.warn('Unsupported file type');
           }
         };
         if (this.selectedFileType === 'Geojson(.json)') {
           reader.readAsText(file);
+        } else if (this.selectedFileType === 'NetCDF (.nc)') {
+          reader.readAsArrayBuffer(file);
         } else {
           reader.readAsArrayBuffer(file);
         }
@@ -126,5 +142,65 @@ export class FileUploadComponent {
         console.error('Error processing GeoTIFF:', error);
       }
     );
+  }
+
+  private processNetCDF(file: File) {
+    this.fileUploadService.processNetCDF(file).subscribe({
+      next: ({ metadata, reader }) => {
+        this.showNetCDFOptionsDialog(metadata, reader);
+      },
+      error: (error) => {
+        console.error('Error processing NetCDF:', error);
+      }
+    });
+  }
+
+  private showNetCDFOptionsDialog(metadata: NetCDFMetadata, reader: NetCDFReader) {
+    const map = this.mapService.getMap();
+    const center = map.getCenter();
+    const popup = L.popup({
+      closeButton: true,
+      closeOnClick: false,
+      maxWidth: 400,
+      className: 'netcdf-options-popup'
+    })
+      .setLatLng(center)
+      .setContent(this.createNetCDFOptionsContent(metadata, reader))
+      .openOn(map);
+
+    // Prevent popup from closing when clicking inside it
+    const container = popup.getElement();
+    if (container) {
+      L.DomEvent.disableClickPropagation(container);
+    }
+  }
+
+  private createNetCDFOptionsContent(metadata: NetCDFMetadata, reader: NetCDFReader): HTMLElement {
+    const container = document.createElement('div');
+    
+    // Create and render the NetCDFOptionsComponent
+    const netcdfOptions = document.createElement('app-netcdf-options');
+    container.appendChild(netcdfOptions);
+
+    // Initialize the component
+    const componentRef = createComponent(NetCDFOptionsComponent, {
+      environmentInjector: this.injector,
+      hostElement: netcdfOptions
+    });
+
+    // Set inputs and handle outputs
+    componentRef.instance.metadata = metadata;
+    componentRef.instance.optionsSelected.subscribe((options: NetCDFDisplayOptions) => {
+      this.fileUploadService.createRasterFromNetCDF(reader, options).subscribe({
+        next: (rasterData) => {
+          this.fileUploadService.updateProcessedData(rasterData);
+          const map = this.mapService.getMap();
+          map.closePopup();
+        },
+        error: (error) => console.error('Error creating raster:', error)
+      });
+    });
+
+    return container;
   }
 }

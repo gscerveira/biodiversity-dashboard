@@ -6,6 +6,25 @@ import * as GeoTIFF from 'geotiff';
 import { ApiService } from './api.service';
 import { ApiResponse } from '../interfaces/api.interface';
 import { ApiFile } from '../interfaces/api.interface';
+import { NetCDFReader } from 'netcdfjs';
+export { NetCDFReader };
+
+export interface NetCDFVariable {
+  name: string;
+  dimensions: string[];
+  attributes: { [key: string]: any };
+}
+
+export interface NetCDFMetadata {
+  variables: NetCDFVariable[];
+  times?: Date[];
+  bounds?: [number, number, number, number]; // [minLat, minLon, maxLat, maxLon]
+}
+
+export interface NetCDFDisplayOptions {
+  variable: string;
+  timeIndex?: number;
+}
 
 @Injectable({
   providedIn: 'root'
@@ -140,6 +159,119 @@ export class FileUploadService {
         }
       };
       reader.readAsText(file);
+    });
+  }
+
+  processNetCDF(file: File): Observable<{ metadata: NetCDFMetadata; reader: NetCDFReader }> {
+    return new Observable(observer => {
+      const fileReader = new FileReader();
+      
+      fileReader.onload = (e: any) => {
+        try {
+          const buffer = e.target.result;
+          const reader = new NetCDFReader(buffer);
+          
+          // Extract variables metadata
+          const variables = reader.variables.map(v => ({
+            name: v.name,
+            dimensions: v.dimensions.map(String),
+            attributes: v.attributes
+          }));
+
+          // Try to find coordinate variables
+          const lats = reader.getDataVariable('lat') || reader.getDataVariable('latitude');
+          const lons = reader.getDataVariable('lon') || reader.getDataVariable('longitude');
+          
+          // Calculate bounds if coordinates exist
+          const latArray = Array.isArray(lats) ? lats : [lats];
+          const lonArray = Array.isArray(lons) ? lons : [lons];
+          const numericLats = latArray.map(Number).filter(n => !isNaN(n));
+          const numericLons = lonArray.map(Number).filter(n => !isNaN(n));
+
+          const bounds = numericLats.length && numericLons.length ? [
+            Math.min(...numericLats),
+            Math.min(...numericLons),
+            Math.max(...numericLats),
+            Math.max(...numericLons)
+          ] as [number, number, number, number] : undefined;
+
+          const metadata: NetCDFMetadata = {
+            variables,
+            bounds
+          };
+
+          observer.next({ metadata, reader });
+          observer.complete();
+        } catch (error) {
+          observer.error(error);
+        }
+      };
+
+      fileReader.readAsArrayBuffer(file);
+    });
+  }
+
+  createRasterFromNetCDF(
+    reader: NetCDFReader, 
+    options: NetCDFDisplayOptions
+  ): Observable<{ imageUrl: string; bounds: [number, number][] }> {
+    return new Observable(observer => {
+      try {
+        const data = reader.getDataVariable(options.variable);
+        const lats = reader.getDataVariable('lat') || reader.getDataVariable('latitude');
+        const lons = reader.getDataVariable('lon') || reader.getDataVariable('longitude');
+
+        if (!data || !lats || !lons) {
+          throw new Error('Missing required variables');
+        }
+
+        // Create canvas and get context
+        const canvas = document.createElement('canvas');
+        canvas.width = lons.length;
+        canvas.height = lats.length;
+        const ctx = canvas.getContext('2d');
+
+        if (!ctx) {
+          throw new Error('Could not get canvas context');
+        }
+
+        // Create image data
+        const imageData = ctx.createImageData(canvas.width, canvas.height);
+        
+        // Find data range for normalization
+        const numericData = Array.isArray(data) ? data : [data];
+        const validNumbers = numericData.map(Number).filter(n => !isNaN(n));
+        const min = Math.min(...validNumbers);
+        const max = Math.max(...validNumbers);
+        const range = max - min;
+
+        // Fill image data
+        for (let i = 0; i < data.length; i++) {
+          const value = Number(data[i]) || 0;
+          const normalizedValue = ((value - min) / range) * 255;
+          const idx = i * 4;
+          imageData.data[idx] = normalizedValue;     // R
+          imageData.data[idx + 1] = normalizedValue; // G
+          imageData.data[idx + 2] = normalizedValue; // B
+          imageData.data[idx + 3] = 255;            // A
+        }
+
+        ctx.putImageData(imageData, 0, 0);
+
+        const latArray = Array.isArray(lats) ? lats : [lats];
+        const lonArray = Array.isArray(lons) ? lons : [lons];
+        const numericLats = latArray.map(Number).filter(n => !isNaN(n));
+        const numericLons = lonArray.map(Number).filter(n => !isNaN(n));
+
+        observer.next({
+          imageUrl: canvas.toDataURL(),
+          bounds: [[Math.min(...numericLats), Math.min(...numericLons)], 
+                  [Math.max(...numericLats), Math.max(...numericLons)]]
+        });
+        observer.complete();
+      } catch (error) {
+        observer.error(error);
+      }
     });
   }
 }
