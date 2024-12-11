@@ -257,8 +257,35 @@ export class FileUploadService {
     return new Observable(observer => {
       try {
         const data = reader.getDataVariable(options.variable);
-        const lats = reader.getDataVariable('lat') || reader.getDataVariable('latitude');
-        const lons = reader.getDataVariable('lon') || reader.getDataVariable('longitude');
+        
+        // Try to find coordinate variables with safer null checks
+        let lats = null;
+        let lons = null;
+
+        // First try 'latitude'/'longitude'
+        try {
+          lats = reader.getDataVariable('latitude');
+        } catch {
+          // If 'latitude' fails, try 'lat'
+          try {
+            lats = reader.getDataVariable('lat');
+          } catch {
+            observer.error(new Error('No latitude variable found in NetCDF file'));
+            return;
+          }
+        }
+
+        try {
+          lons = reader.getDataVariable('longitude');
+        } catch {
+          // If 'longitude' fails, try 'lon'
+          try {
+            lons = reader.getDataVariable('lon');
+          } catch {
+            observer.error(new Error('No longitude variable found in NetCDF file'));
+            return;
+          }
+        }
 
         if (!data || !lats || !lons) {
           throw new Error('Missing required variables');
@@ -266,8 +293,8 @@ export class FileUploadService {
 
         // Create canvas and get context
         const canvas = document.createElement('canvas');
-        canvas.width = lons.length;
-        canvas.height = lats.length;
+        canvas.width = Array.isArray(lons) ? lons.length : 1;
+        canvas.height = Array.isArray(lats) ? lats.length : 1;
         const ctx = canvas.getContext('2d');
 
         if (!ctx) {
