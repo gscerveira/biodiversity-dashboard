@@ -272,7 +272,7 @@ export class FileUploadService {
         const imageData = ctx.createImageData(width, height);
         const dataArray = Array.isArray(data) ? data : [data];
         
-        // Calculate min/max without spread operator
+        // Calculate min/max for normalization
         let min = Number(dataArray[0]) || 0;
         let max = Number(dataArray[0]) || 0;
         for (let i = 1; i < dataArray.length; i++) {
@@ -285,20 +285,28 @@ export class FileUploadService {
 
         const range = max - min || 1;
 
-        // Process image data
-        for (let i = 0; i < dataArray.length; i++) {
-          const value = Number(dataArray[i]) || 0;
-          const normalizedValue = ((value - min) / range) * 255;
-          const idx = i * 4;
-          imageData.data[idx] = normalizedValue;
-          imageData.data[idx + 1] = normalizedValue;
-          imageData.data[idx + 2] = normalizedValue;
-          imageData.data[idx + 3] = 255;
+        // Process image data with vertical flip
+        for (let y = 0; y < height; y++) {
+          for (let x = 0; x < width; x++) {
+            // Flip the y-coordinate by reading from bottom to top
+            const sourceY = height - 1 - y;
+            const sourceIndex = sourceY * width + x;
+            const targetIndex = y * width + x;
+            
+            const value = Number(dataArray[sourceIndex]) || 0;
+            const normalizedValue = ((value - min) / range) * 255;
+            const idx = targetIndex * 4;
+            
+            imageData.data[idx] = normalizedValue;
+            imageData.data[idx + 1] = normalizedValue;
+            imageData.data[idx + 2] = normalizedValue;
+            imageData.data[idx + 3] = 255;
+          }
         }
 
         ctx.putImageData(imageData, 0, 0);
 
-        // Calculate bounds without spread operator
+        // Calculate bounds
         const latArray = Array.isArray(lats) ? lats : [lats];
         const lonArray = Array.isArray(lons) ? lons : [lons];
         
