@@ -178,9 +178,39 @@ export class FileUploadService {
             attributes: v.attributes
           }));
 
-          // Try to find coordinate variables
-          const lats = reader.getDataVariable('lat') || reader.getDataVariable('latitude');
-          const lons = reader.getDataVariable('lon') || reader.getDataVariable('longitude');
+          // Try to find coordinate variables with safer null checks
+          let lats = null;
+          let lons = null;
+
+          // First try 'latitude'/'longitude'
+          try {
+            lats = reader.getDataVariable('latitude');
+          } catch {
+            // If 'latitude' fails, try 'lat'
+            try {
+              lats = reader.getDataVariable('lat');
+            } catch {
+              observer.error(new Error('No latitude variable found in NetCDF file'));
+              return;
+            }
+          }
+
+          try {
+            lons = reader.getDataVariable('longitude');
+          } catch {
+            // If 'longitude' fails, try 'lon'
+            try {
+              lons = reader.getDataVariable('lon');
+            } catch {
+              observer.error(new Error('No longitude variable found in NetCDF file'));
+              return;
+            }
+          }
+
+          if (!lats || !lons) {
+            observer.error(new Error('Missing required coordinate variables'));
+            return;
+          }
           
           // Calculate bounds if coordinates exist
           const latArray = Array.isArray(lats) ? lats : [lats];
@@ -188,12 +218,17 @@ export class FileUploadService {
           const numericLats = latArray.map(Number).filter(n => !isNaN(n));
           const numericLons = lonArray.map(Number).filter(n => !isNaN(n));
 
-          const bounds = numericLats.length && numericLons.length ? [
+          if (!numericLats.length || !numericLons.length) {
+            observer.error(new Error('Invalid coordinate values in NetCDF file'));
+            return;
+          }
+
+          const bounds = [
             Math.min(...numericLats),
             Math.min(...numericLons),
             Math.max(...numericLats),
             Math.max(...numericLons)
-          ] as [number, number, number, number] : undefined;
+          ] as [number, number, number, number];
 
           const metadata: NetCDFMetadata = {
             variables,
