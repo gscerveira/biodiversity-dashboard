@@ -5,59 +5,106 @@ import { ApiFile } from '../../../../core/interfaces/api.interface';
 @Component({
   selector: 'app-remote-files',
   template: `
-    <div class="remote-files-container">
-      <h3>Remote Files</h3>
-      <div class="file-list">
-        <div *ngFor="let file of files()" 
-             class="file-item"
-             (click)="loadFile(file)">
-          <i class="fas fa-file"></i>
-          <span>{{ file.user_filename }}</span>
-          <small>{{ formatFileSize(file.size) }}</small>
-        </div>
-        <div *ngIf="files().length === 0" class="no-files">
-          No files available
+    <div class="remote-files-dropdown">
+      <button class="dropdown-toggle" (click)="isOpen = !isOpen">
+        <i class="fas fa-folder"></i>
+        Remote Files
+        <i class="fas fa-chevron-down" [class.rotated]="isOpen"></i>
+      </button>
+      
+      <div class="dropdown-menu" *ngIf="isOpen">
+        <div class="file-list">
+          <div *ngFor="let file of files()" 
+               class="file-item"
+               (click)="loadFile(file)">
+            <i class="fas fa-file"></i>
+            <span class="file-name">{{ file.user_filename }}</span>
+            <small>{{ formatFileSize(file.size) }}</small>
+          </div>
+          <div *ngIf="files().length === 0" class="no-files">
+            No files available
+          </div>
         </div>
       </div>
     </div>
   `,
   styles: [`
-    .remote-files-container {
+    .remote-files-dropdown {
       position: absolute;
       top: 10px;
       left: 10px;
-      padding: 10px;
+      z-index: 1000;
+      min-width: 200px;
+    }
+
+    .dropdown-toggle {
+      width: 100%;
+      padding: 8px 12px;
       background: white;
+      border: none;
       border-radius: 4px;
       box-shadow: 0 1px 5px rgba(0,0,0,0.2);
-      z-index: 1000;
-      min-width: 250px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 14px;
+      
+      &:hover {
+        background: #f8f8f8;
+      }
+
+      .fa-chevron-down {
+        margin-left: auto;
+        transition: transform 0.2s ease;
+        
+        &.rotated {
+          transform: rotate(180deg);
+        }
+      }
     }
-    
-    .file-list {
+
+    .dropdown-menu {
+      margin-top: 5px;
+      background: white;
+      border-radius: 4px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.2);
       max-height: 300px;
       overflow-y: auto;
     }
-    
+
+    .file-list {
+      padding: 5px;
+    }
+
     .file-item {
       padding: 8px;
       cursor: pointer;
       display: flex;
       align-items: center;
       gap: 8px;
-      border-bottom: 1px solid #eee;
+      border-radius: 4px;
+      font-size: 13px;
       
       &:hover {
         background: #f5f5f5;
       }
-      
+
+      .file-name {
+        flex: 1;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
       i {
         color: #666;
+        width: 16px;
       }
 
       small {
         color: #999;
-        margin-left: auto;
+        font-size: 11px;
       }
     }
 
@@ -66,11 +113,13 @@ import { ApiFile } from '../../../../core/interfaces/api.interface';
       color: #666;
       text-align: center;
       font-style: italic;
+      font-size: 13px;
     }
   `]
 })
 export class RemoteFilesComponent implements OnInit {
   files = signal<ApiFile[]>([]);
+  isOpen = false;
 
   constructor(private fileUploadService: FileUploadService) {}
 
@@ -79,20 +128,13 @@ export class RemoteFilesComponent implements OnInit {
   }
 
   loadRemoteFiles() {
-    console.log('Starting to load remote files'); // Debug log
     this.fileUploadService.getRemoteFiles().subscribe({
       next: (files) => {
-        console.log('Files received:', files); // Debug log
         this.files.set(files);
       },
       error: (error) => {
-        console.error('Error details:', {
-          message: error.message,
-          status: error.status,
-          statusText: error.statusText,
-          error: error
-        });
-        this.files.set([]); // Set empty array on error
+        console.error('Error loading files:', error);
+        this.files.set([]);
       }
     });
   }
@@ -101,7 +143,7 @@ export class RemoteFilesComponent implements OnInit {
     this.fileUploadService.loadRemoteFile(file).subscribe({
       next: (data) => {
         this.fileUploadService.updateProcessedData(data);
-        console.log('File loaded successfully:', file.user_filename);
+        this.isOpen = false; // Close dropdown after selection
       },
       error: (error) => console.error('Error loading file:', error)
     });
