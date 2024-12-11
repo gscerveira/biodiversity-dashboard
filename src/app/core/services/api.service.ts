@@ -45,7 +45,7 @@ export class ApiService {
 
   downloadFile(filename: string): Observable<Blob> {
     const params = {
-      filename: '',
+      filename: filename,
       object_path: filename,
       bucket_name: 'temporary',
       isOutput: false

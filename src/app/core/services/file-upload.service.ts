@@ -112,7 +112,7 @@ export class FileUploadService {
   }
 
   loadRemoteFile(apiFile: ApiFile) {
-    return this.apiService.downloadFile(apiFile.filename).pipe(
+    return this.apiService.downloadFile(apiFile.user_filename).pipe(
       switchMap(blob => {
         const file = new File([blob], apiFile.user_filename);
         if (apiFile.user_filename.endsWith('.json')) {
