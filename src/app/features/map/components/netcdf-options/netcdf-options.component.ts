@@ -22,6 +22,8 @@ import { NetCDFMetadata, NetCDFDisplayOptions } from '../../../../core/services/
           </select>
         </div>
 
+        <pre>{{ metadata | json }}</pre> <!-- Debug output -->
+
         <div class="form-actions">
           <button class="confirm-button" (click)="confirmSelection()" [disabled]="!selectedVariable">
             Visualize Data
@@ -83,7 +85,14 @@ import { NetCDFMetadata, NetCDFDisplayOptions } from '../../../../core/services/
   `]
 })
 export class NetCDFOptionsComponent {
-  @Input() metadata?: NetCDFMetadata;
+  @Input() set metadata(value: NetCDFMetadata | undefined) {
+    console.log('Metadata received:', value);
+    this._metadata = value;
+  }
+  get metadata(): NetCDFMetadata | undefined {
+    return this._metadata;
+  }
+  private _metadata?: NetCDFMetadata;
   @Output() optionsSelected = new EventEmitter<NetCDFDisplayOptions>();
 
   selectedVariable: string = '';

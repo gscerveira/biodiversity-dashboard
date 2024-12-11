@@ -163,6 +163,7 @@ export class FileUploadService {
   }
 
   processNetCDF(file: File): Observable<{ metadata: NetCDFMetadata; reader: NetCDFReader }> {
+    console.log('Processing NetCDF file:', file.name);
     return new Observable(observer => {
       const fileReader = new FileReader();
       
@@ -234,6 +235,9 @@ export class FileUploadService {
             variables,
             bounds
           };
+
+          console.log('NetCDF metadata:', metadata);
+          console.log('NetCDF variables:', metadata.variables);
 
           observer.next({ metadata, reader });
           observer.complete();
