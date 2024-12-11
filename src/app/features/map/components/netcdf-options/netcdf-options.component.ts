@@ -17,12 +17,10 @@ import { NetCDFMetadata, NetCDFDisplayOptions } from '../../../../core/services/
           <select id="variable" [(ngModel)]="selectedVariable" (change)="updateOptions()">
             <option value="">Choose a variable</option>
             <option *ngFor="let variable of metadata?.variables" [value]="variable.name">
-              {{ variable.name }}
+              {{ variable.name }} - {{ getVariableDescription(variable) }}
             </option>
           </select>
         </div>
-
-        <pre>{{ metadata | json }}</pre> <!-- Debug output -->
 
         <div class="form-actions">
           <button class="confirm-button" (click)="confirmSelection()" [disabled]="!selectedVariable">
@@ -108,5 +106,17 @@ export class NetCDFOptionsComponent {
 
   confirmSelection() {
     this.updateOptions();
+  }
+
+  getVariableDescription(variable: any): string {
+    const longName = variable.attributes?.find((attr: any) => attr.name === 'long_name')?.value;
+    const units = variable.attributes?.find((attr: any) => attr.name === 'units')?.value;
+    
+    if (longName && units) {
+      return `${longName} (${units})`;
+    } else if (longName) {
+      return longName;
+    }
+    return '';
   }
 } 
