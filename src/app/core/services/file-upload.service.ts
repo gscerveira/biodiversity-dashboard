@@ -98,28 +98,28 @@ export class FileUploadService {
       map((response: ApiResponse<ApiFile[]>) => {
         console.log('API Response:', response);
         
+        if (Array.isArray(response)) {
+          return response;
+        }
+        
         if (!response || response.success === false) {
           throw new Error(response?.message || 'Failed to fetch files');
         }
         
-        if (!Array.isArray(response.data)) {
-          throw new Error('Invalid response format: data is not an array');
-        }
-        
-        return response.data;
+        return response.data || [];
       })
     );
   }
 
-  loadRemoteFile(filename: string) {
-    return this.apiService.downloadFile(filename).pipe(
+  loadRemoteFile(apiFile: ApiFile) {
+    return this.apiService.downloadFile(apiFile.filename).pipe(
       switchMap(blob => {
-        const file = new File([blob], filename);
-        if (filename.endsWith('.json')) {
+        const file = new File([blob], apiFile.user_filename);
+        if (apiFile.user_filename.endsWith('.json')) {
           return this.processGeoJsonFile(file);
-        } else if (filename.endsWith('.zip')) {
+        } else if (apiFile.user_filename.endsWith('.zip')) {
           return this.processShapefile(file);
-        } else if (filename.endsWith('.tif') || filename.endsWith('.tiff')) {
+        } else if (apiFile.user_filename.endsWith('.tif') || apiFile.user_filename.endsWith('.tiff')) {
           return this.processGeoTiff(file);
         }
         throw new Error('Unsupported file type');

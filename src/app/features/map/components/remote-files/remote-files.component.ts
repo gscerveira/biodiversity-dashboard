@@ -79,20 +79,26 @@ export class RemoteFilesComponent implements OnInit {
   }
 
   loadRemoteFiles() {
+    console.log('Starting to load remote files'); // Debug log
     this.fileUploadService.getRemoteFiles().subscribe({
       next: (files) => {
+        console.log('Files received:', files); // Debug log
         this.files.set(files);
-        console.log('Files loaded:', files); // Debug log
       },
       error: (error) => {
-        console.error('Error loading remote files:', error);
+        console.error('Error details:', {
+          message: error.message,
+          status: error.status,
+          statusText: error.statusText,
+          error: error
+        });
         this.files.set([]); // Set empty array on error
       }
     });
   }
 
   loadFile(file: ApiFile) {
-    this.fileUploadService.loadRemoteFile(file.filename).subscribe({
+    this.fileUploadService.loadRemoteFile(file).subscribe({
       next: (data) => {
         this.fileUploadService.updateProcessedData(data);
         console.log('File loaded successfully:', file.user_filename);
