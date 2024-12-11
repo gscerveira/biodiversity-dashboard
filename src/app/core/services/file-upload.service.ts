@@ -4,6 +4,8 @@ import { map, switchMap } from 'rxjs/operators';
 import shpjs from 'shpjs';
 import * as GeoTIFF from 'geotiff';
 import { ApiService } from './api.service';
+import { ApiResponse } from '../interfaces/api.interface';
+import { ApiFile } from '../interfaces/api.interface';
 
 @Injectable({
   providedIn: 'root'
@@ -93,7 +95,19 @@ export class FileUploadService {
 
   getRemoteFiles() {
     return this.apiService.getUploadedFiles().pipe(
-      map(response => response.data)
+      map((response: ApiResponse<ApiFile[]>) => {
+        console.log('API Response:', response);
+        
+        if (!response || response.success === false) {
+          throw new Error(response?.message || 'Failed to fetch files');
+        }
+        
+        if (!Array.isArray(response.data)) {
+          throw new Error('Invalid response format: data is not an array');
+        }
+        
+        return response.data;
+      })
     );
   }
 

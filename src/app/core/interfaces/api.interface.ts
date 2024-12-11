@@ -1,8 +1,10 @@
 export interface ApiFile {
+  type: string;
   filename: string;
-  path: string;
+  user_filename: string;
+  date: string;
   size: number;
-  lastModified: string;
+  tags: string[];
 }
 
 export interface ApiResponse<T> {
