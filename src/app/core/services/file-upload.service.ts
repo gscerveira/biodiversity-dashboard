@@ -216,18 +216,14 @@ export class FileUploadService {
           // Calculate bounds if coordinates exist
           const latArray = Array.isArray(lats) ? lats : [lats];
           const lonArray = Array.isArray(lons) ? lons : [lons];
-          const numericLats = latArray.map(Number).filter(n => !isNaN(n));
-          const numericLons = lonArray.map(Number).filter(n => !isNaN(n));
 
-          if (!numericLats.length || !numericLons.length) {
-            observer.error(new Error('Invalid coordinate values in NetCDF file'));
-            return;
-          }
+          const numericLats = latArray.map(Number);
+          const numericLons = lonArray.map(Number);
 
           const bounds = [
-            Math.min(...numericLats),
+            Math.min(...numericLats), 
             Math.min(...numericLons),
-            Math.max(...numericLats),
+            Math.max(...numericLats), 
             Math.max(...numericLons)
           ] as [number, number, number, number];
 
@@ -257,82 +253,79 @@ export class FileUploadService {
     return new Observable(observer => {
       try {
         const data = reader.getDataVariable(options.variable);
-        
-        // Try to find coordinate variables with safer null checks
-        let lats = null;
-        let lons = null;
-
-        // First try 'latitude'/'longitude'
-        try {
-          lats = reader.getDataVariable('latitude');
-        } catch {
-          // If 'latitude' fails, try 'lat'
-          try {
-            lats = reader.getDataVariable('lat');
-          } catch {
-            observer.error(new Error('No latitude variable found in NetCDF file'));
-            return;
-          }
-        }
-
-        try {
-          lons = reader.getDataVariable('longitude');
-        } catch {
-          // If 'longitude' fails, try 'lon'
-          try {
-            lons = reader.getDataVariable('lon');
-          } catch {
-            observer.error(new Error('No longitude variable found in NetCDF file'));
-            return;
-          }
-        }
+        const lats = reader.getDataVariable('latitude') || reader.getDataVariable('lat');
+        const lons = reader.getDataVariable('longitude') || reader.getDataVariable('lon');
 
         if (!data || !lats || !lons) {
           throw new Error('Missing required variables');
         }
 
-        // Create canvas and get context
+        const width = Array.isArray(lons) ? lons.length : 1;
+        const height = Array.isArray(lats) ? lats.length : 1;
         const canvas = document.createElement('canvas');
-        canvas.width = Array.isArray(lons) ? lons.length : 1;
-        canvas.height = Array.isArray(lats) ? lats.length : 1;
+        canvas.width = width;
+        canvas.height = height;
+        
         const ctx = canvas.getContext('2d');
+        if (!ctx) throw new Error('Could not get canvas context');
 
-        if (!ctx) {
-          throw new Error('Could not get canvas context');
+        const imageData = ctx.createImageData(width, height);
+        const dataArray = Array.isArray(data) ? data : [data];
+        
+        // Calculate min/max without spread operator
+        let min = Number(dataArray[0]) || 0;
+        let max = Number(dataArray[0]) || 0;
+        for (let i = 1; i < dataArray.length; i++) {
+          const value = Number(dataArray[i]);
+          if (!isNaN(value)) {
+            if (value < min) min = value;
+            if (value > max) max = value;
+          }
         }
 
-        // Create image data
-        const imageData = ctx.createImageData(canvas.width, canvas.height);
-        
-        // Find data range for normalization
-        const numericData = Array.isArray(data) ? data : [data];
-        const validNumbers = numericData.map(Number).filter(n => !isNaN(n));
-        const min = Math.min(...validNumbers);
-        const max = Math.max(...validNumbers);
-        const range = max - min;
+        const range = max - min || 1;
 
-        // Fill image data
-        for (let i = 0; i < data.length; i++) {
-          const value = Number(data[i]) || 0;
+        // Process image data
+        for (let i = 0; i < dataArray.length; i++) {
+          const value = Number(dataArray[i]) || 0;
           const normalizedValue = ((value - min) / range) * 255;
           const idx = i * 4;
-          imageData.data[idx] = normalizedValue;     // R
-          imageData.data[idx + 1] = normalizedValue; // G
-          imageData.data[idx + 2] = normalizedValue; // B
-          imageData.data[idx + 3] = 255;            // A
+          imageData.data[idx] = normalizedValue;
+          imageData.data[idx + 1] = normalizedValue;
+          imageData.data[idx + 2] = normalizedValue;
+          imageData.data[idx + 3] = 255;
         }
 
         ctx.putImageData(imageData, 0, 0);
 
+        // Calculate bounds without spread operator
         const latArray = Array.isArray(lats) ? lats : [lats];
         const lonArray = Array.isArray(lons) ? lons : [lons];
-        const numericLats = latArray.map(Number).filter(n => !isNaN(n));
-        const numericLons = lonArray.map(Number).filter(n => !isNaN(n));
+        
+        let minLat = Number(latArray[0]) || 0;
+        let maxLat = Number(latArray[0]) || 0;
+        let minLon = Number(lonArray[0]) || 0;
+        let maxLon = Number(lonArray[0]) || 0;
+
+        for (let i = 1; i < latArray.length; i++) {
+          const lat = Number(latArray[i]);
+          if (!isNaN(lat)) {
+            if (lat < minLat) minLat = lat;
+            if (lat > maxLat) maxLat = lat;
+          }
+        }
+
+        for (let i = 1; i < lonArray.length; i++) {
+          const lon = Number(lonArray[i]);
+          if (!isNaN(lon)) {
+            if (lon < minLon) minLon = lon;
+            if (lon > maxLon) maxLon = lon;
+          }
+        }
 
         observer.next({
           imageUrl: canvas.toDataURL(),
-          bounds: [[Math.min(...numericLats), Math.min(...numericLons)], 
-                  [Math.max(...numericLats), Math.max(...numericLons)]]
+          bounds: [[minLat, minLon], [maxLat, maxLon]]
         });
         observer.complete();
       } catch (error) {
