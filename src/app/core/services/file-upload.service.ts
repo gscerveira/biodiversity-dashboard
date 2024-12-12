@@ -260,24 +260,31 @@ export class FileUploadService {
           throw new Error('Missing required variables');
         }
 
+        // Get fill value from variable attributes
+        const variable = reader.variables.find(v => v.name === options.variable);
+        const fillValue = (variable?.attributes?.find(
+          (attr: any) => attr.name === '_FillValue' || attr.name === 'missing_value'
+        ) as any)?.value;
+
         const width = Array.isArray(lons) ? lons.length : 1;
         const height = Array.isArray(lats) ? lats.length : 1;
         const canvas = document.createElement('canvas');
         canvas.width = width;
         canvas.height = height;
-
+        
         const ctx = canvas.getContext('2d');
         if (!ctx) throw new Error('Could not get canvas context');
 
         const imageData = ctx.createImageData(width, height);
         const dataArray = Array.isArray(data) ? data : [data];
-
-        // Calculate min/max for normalization
-        let min = Number(dataArray[0]) || 0;
-        let max = Number(dataArray[0]) || 0;
-        for (let i = 1; i < dataArray.length; i++) {
+        
+        // Calculate min/max for normalization, excluding fill values
+        let min = Infinity;
+        let max = -Infinity;
+        for (let i = 0; i < dataArray.length; i++) {
           const value = Number(dataArray[i]);
-          if (!isNaN(value)) {
+          // Skip fill values and NaN
+          if (!isNaN(value) && (fillValue === undefined || value !== fillValue)) {
             if (value < min) min = value;
             if (value > max) max = value;
           }
@@ -287,8 +294,13 @@ export class FileUploadService {
 
         // Color scale function
         const getColor = (value: number): [number, number, number] => {
-          const normalizedValue = (value - min) / range;
+          // Return transparent for fill values or NaN
+          if (isNaN(value) || (fillValue !== undefined && value === fillValue)) {
+            return [0, 0, 0]; // Will be made transparent with alpha = 0
+          }
 
+          const normalizedValue = (value - min) / range;
+          
           // Define color stops for the gradient
           const colors = [
             [0, [0, 0, 255]],      // Blue for lowest values
@@ -297,7 +309,7 @@ export class FileUploadService {
             [0.75, [255, 255, 0]], // Yellow
             [1, [255, 0, 0]]       // Red for highest values
           ] as const;
-
+          
           // Find the color stops to interpolate between
           let lowIndex = 0;
           for (let i = 1; i < colors.length; i++) {
@@ -306,13 +318,13 @@ export class FileUploadService {
             }
             lowIndex = i - 1;
           }
-
+          
           const lowStop = colors[lowIndex];
           const highStop = colors[lowIndex + 1] || colors[lowIndex];
-
+          
           // Calculate interpolation factor
           const factor = (normalizedValue - lowStop[0]) / (highStop[0] - lowStop[0]);
-
+          
           // Interpolate between colors
           return [
             Math.round(lowStop[1][0] + (highStop[1][0] - lowStop[1][0]) * factor),
@@ -328,15 +340,16 @@ export class FileUploadService {
             const sourceY = height - 1 - y;
             const sourceIndex = sourceY * width + x;
             const targetIndex = y * width + x;
-
-            const value = Number(dataArray[sourceIndex]) || 0;
-            const normalizedValue = ((value - min) / range) * 255;
+            
+            const value = Number(dataArray[sourceIndex]);
+            const [r, g, b] = getColor(value);
             const idx = targetIndex * 4;
-
-            imageData.data[idx] = normalizedValue;
-            imageData.data[idx + 1] = normalizedValue;
-            imageData.data[idx + 2] = normalizedValue;
-            imageData.data[idx + 3] = 255;
+            
+            imageData.data[idx] = r;
+            imageData.data[idx + 1] = g;
+            imageData.data[idx + 2] = b;
+            // Set alpha to 0 for fill values/NaN, 255 for valid values
+            imageData.data[idx + 3] = isNaN(value) || (fillValue !== undefined && value === fillValue) ? 0 : 255;
           }
         }
 
@@ -345,27 +358,11 @@ export class FileUploadService {
         // Calculate bounds
         const latArray = Array.isArray(lats) ? lats : [lats];
         const lonArray = Array.isArray(lons) ? lons : [lons];
-
-        let minLat = Number(latArray[0]) || 0;
-        let maxLat = Number(latArray[0]) || 0;
-        let minLon = Number(lonArray[0]) || 0;
-        let maxLon = Number(lonArray[0]) || 0;
-
-        for (let i = 1; i < latArray.length; i++) {
-          const lat = Number(latArray[i]);
-          if (!isNaN(lat)) {
-            if (lat < minLat) minLat = lat;
-            if (lat > maxLat) maxLat = lat;
-          }
-        }
-
-        for (let i = 1; i < lonArray.length; i++) {
-          const lon = Number(lonArray[i]);
-          if (!isNaN(lon)) {
-            if (lon < minLon) minLon = lon;
-            if (lon > maxLon) maxLon = lon;
-          }
-        }
+        
+        let minLat = Math.min(...latArray.map(Number));
+        let maxLat = Math.max(...latArray.map(Number));
+        let minLon = Math.min(...lonArray.map(Number));
+        let maxLon = Math.max(...lonArray.map(Number));
 
         observer.next({
           imageUrl: canvas.toDataURL(),
