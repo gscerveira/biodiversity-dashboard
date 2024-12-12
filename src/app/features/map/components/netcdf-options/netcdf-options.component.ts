@@ -16,7 +16,7 @@ import { NetCDFMetadata, NetCDFDisplayOptions } from '../../../../core/services/
           <label for="variable">Select Variable:</label>
           <select id="variable" [(ngModel)]="selectedVariable" (change)="updateOptions()">
             <option value="">Choose a variable</option>
-            <option *ngFor="let variable of metadata?.variables" [value]="variable.name">
+            <option *ngFor="let variable of nonDimensionVariables" [value]="variable.name">
               {{ variable.name }} - {{ getVariableDescription(variable) }}
             </option>
           </select>
@@ -118,5 +118,46 @@ export class NetCDFOptionsComponent {
       return longName;
     }
     return '';
+  }
+
+  get nonDimensionVariables(): any[] {
+    console.log('Computing nonDimensionVariables');
+    console.log('Current metadata:', this.metadata);
+    
+    if (!this.metadata?.variables) {
+      console.log('No metadata or variables found');
+      return [];
+    }
+    
+    const filtered = this.metadata.variables.filter((variable, index) => {
+      const isDim = this.isDimension(variable, index);
+      console.log(`Variable ${variable.name}:`, {
+        index,
+        dimensions: variable.dimensions,
+        isDimension: isDim
+      });
+      return !isDim;
+    });
+    
+    console.log('Filtered variables:', filtered);
+    return filtered;
+  }
+
+  isDimension(variable: any, index: number): boolean {
+    if (!this.metadata) {
+      console.log('No metadata available in isDimension check');
+      return false;
+    }
+    
+    const result = (variable.dimensions.length === 1 && 
+                  variable.dimensions[0] === index.toString()) ||
+                  variable.name === 'time';
+                  
+    console.log(`Checking if ${variable.name} is dimension:`, {
+      index,
+      dimensions: variable.dimensions,
+      isItDimension: result
+    });
+    return result;
   }
 } 
