@@ -33,7 +33,7 @@ export class FileUploadService {
   private processedDataSubject = new BehaviorSubject<any>(null);
   processedData$ = this.processedDataSubject.asObservable();
 
-  constructor(private apiService: ApiService) {}
+  constructor(private apiService: ApiService) { }
 
   updateProcessedData(data: any) {
     this.processedDataSubject.next(data);
@@ -116,15 +116,15 @@ export class FileUploadService {
     return this.apiService.getUploadedFiles().pipe(
       map((response: ApiResponse<ApiFile[]>) => {
         console.log('API Response:', response);
-        
+
         if (Array.isArray(response)) {
           return response;
         }
-        
+
         if (!response || response.success === false) {
           throw new Error(response?.message || 'Failed to fetch files');
         }
-        
+
         return response.data || [];
       })
     );
@@ -166,12 +166,12 @@ export class FileUploadService {
     console.log('Processing NetCDF file:', file.name);
     return new Observable(observer => {
       const fileReader = new FileReader();
-      
+
       fileReader.onload = (e: any) => {
         try {
           const buffer = e.target.result;
           const reader = new NetCDFReader(buffer);
-          
+
           // Extract variables metadata
           const variables = reader.variables.map(v => ({
             name: v.name,
@@ -212,7 +212,7 @@ export class FileUploadService {
             observer.error(new Error('Missing required coordinate variables'));
             return;
           }
-          
+
           // Calculate bounds if coordinates exist
           const latArray = Array.isArray(lats) ? lats : [lats];
           const lonArray = Array.isArray(lons) ? lons : [lons];
@@ -221,9 +221,9 @@ export class FileUploadService {
           const numericLons = lonArray.map(Number);
 
           const bounds = [
-            Math.min(...numericLats), 
+            Math.min(...numericLats),
             Math.min(...numericLons),
-            Math.max(...numericLats), 
+            Math.max(...numericLats),
             Math.max(...numericLons)
           ] as [number, number, number, number];
 
@@ -247,7 +247,7 @@ export class FileUploadService {
   }
 
   createRasterFromNetCDF(
-    reader: NetCDFReader, 
+    reader: NetCDFReader,
     options: NetCDFDisplayOptions
   ): Observable<{ imageUrl: string; bounds: [number, number][] }> {
     return new Observable(observer => {
@@ -265,13 +265,13 @@ export class FileUploadService {
         const canvas = document.createElement('canvas');
         canvas.width = width;
         canvas.height = height;
-        
+
         const ctx = canvas.getContext('2d');
         if (!ctx) throw new Error('Could not get canvas context');
 
         const imageData = ctx.createImageData(width, height);
         const dataArray = Array.isArray(data) ? data : [data];
-        
+
         // Calculate min/max for normalization
         let min = Number(dataArray[0]) || 0;
         let max = Number(dataArray[0]) || 0;
@@ -285,6 +285,42 @@ export class FileUploadService {
 
         const range = max - min || 1;
 
+        // Color scale function
+        const getColor = (value: number): [number, number, number] => {
+          const normalizedValue = (value - min) / range;
+
+          // Define color stops for the gradient
+          const colors = [
+            [0, [0, 0, 255]],      // Blue for lowest values
+            [0.25, [0, 255, 255]], // Cyan
+            [0.5, [0, 255, 0]],    // Green
+            [0.75, [255, 255, 0]], // Yellow
+            [1, [255, 0, 0]]       // Red for highest values
+          ] as const;
+
+          // Find the color stops to interpolate between
+          let lowIndex = 0;
+          for (let i = 1; i < colors.length; i++) {
+            if (normalizedValue <= colors[i][0]) {
+              break;
+            }
+            lowIndex = i - 1;
+          }
+
+          const lowStop = colors[lowIndex];
+          const highStop = colors[lowIndex + 1] || colors[lowIndex];
+
+          // Calculate interpolation factor
+          const factor = (normalizedValue - lowStop[0]) / (highStop[0] - lowStop[0]);
+
+          // Interpolate between colors
+          return [
+            Math.round(lowStop[1][0] + (highStop[1][0] - lowStop[1][0]) * factor),
+            Math.round(lowStop[1][1] + (highStop[1][1] - lowStop[1][1]) * factor),
+            Math.round(lowStop[1][2] + (highStop[1][2] - lowStop[1][2]) * factor)
+          ];
+        };
+
         // Process image data with vertical flip
         for (let y = 0; y < height; y++) {
           for (let x = 0; x < width; x++) {
@@ -292,11 +328,11 @@ export class FileUploadService {
             const sourceY = height - 1 - y;
             const sourceIndex = sourceY * width + x;
             const targetIndex = y * width + x;
-            
+
             const value = Number(dataArray[sourceIndex]) || 0;
             const normalizedValue = ((value - min) / range) * 255;
             const idx = targetIndex * 4;
-            
+
             imageData.data[idx] = normalizedValue;
             imageData.data[idx + 1] = normalizedValue;
             imageData.data[idx + 2] = normalizedValue;
@@ -309,7 +345,7 @@ export class FileUploadService {
         // Calculate bounds
         const latArray = Array.isArray(lats) ? lats : [lats];
         const lonArray = Array.isArray(lons) ? lons : [lons];
-        
+
         let minLat = Number(latArray[0]) || 0;
         let maxLat = Number(latArray[0]) || 0;
         let minLon = Number(lonArray[0]) || 0;
