@@ -645,14 +645,10 @@ export class MapComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   private showStatistics(): void {
-    // Use originalGeoJsonData instead of trying to convert VectorGrid back to GeoJSON
-    if (this.originalGeoJsonData) {
-        // Update the statistics component with the current data
-        if (this.statisticsComponent) {
-            this.statisticsComponent.data = this.originalGeoJsonData;
-            this.statisticsComponent.columns = this.columns;
-            this.statisticsComponent.showModal = true;
-        }
+    if (this.statisticsComponent) {
+      this.statisticsComponent.showModal = true;
+      // Calculate statistics with current data when modal is opened
+      this.statisticsComponent.calculateStatistics();
     }
   }
 
@@ -864,10 +860,13 @@ export class MapComponent implements OnInit, AfterViewInit, OnDestroy {
     // Update the map with filtered data
     this.addGeoJsonLayer(filteredGeoJson, false);
 
-    // Update statistics if component is visible
-    if (this.statisticsComponent && this.statisticsComponent.showModal) {
+    // Always update statistics component data, regardless of modal state
+    if (this.statisticsComponent) {
       this.statisticsComponent.data = filteredGeoJson;
-      this.statisticsComponent.calculateStatistics();
+      // Only calculate if modal is open
+      if (this.statisticsComponent.showModal) {
+        this.statisticsComponent.calculateStatistics();
+      }
     }
   }
 
@@ -880,10 +879,13 @@ export class MapComponent implements OnInit, AfterViewInit, OnDestroy {
       }
       this.addGeoJsonLayer(this.originalGeoJsonData, false);
       
-      // Update statistics if component is visible
-      if (this.statisticsComponent && this.statisticsComponent.showModal) {
+      // Always update statistics component data, regardless of modal state
+      if (this.statisticsComponent) {
         this.statisticsComponent.data = this.originalGeoJsonData;
-        this.statisticsComponent.calculateStatistics();
+        // Only calculate if modal is open
+        if (this.statisticsComponent.showModal) {
+          this.statisticsComponent.calculateStatistics();
+        }
       }
     }
   }
