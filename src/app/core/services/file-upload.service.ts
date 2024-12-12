@@ -7,6 +7,7 @@ import { ApiService } from './api.service';
 import { ApiResponse } from '../interfaces/api.interface';
 import { ApiFile } from '../interfaces/api.interface';
 import { NetCDFReader } from 'netcdfjs';
+import * as d3 from 'd3';
 export { NetCDFReader };
 
 export interface NetCDFVariable {
@@ -301,36 +302,27 @@ export class FileUploadService {
 
           const normalizedValue = (value - min) / range;
           
-          // Define color stops for the gradient
-          const colors = [
-            [0, [0, 0, 255]],      // Blue for lowest values
-            [0.25, [0, 255, 255]], // Cyan
-            [0.5, [0, 255, 0]],    // Green
-            [0.75, [255, 255, 0]], // Yellow
-            [1, [255, 0, 0]]       // Red for highest values
-          ] as const;
+          // Define color stops with more intermediate values for smoother transitions
+          const colorScale = d3.scaleSequential()
+            .domain([0, 1])
+            .interpolator(d3.interpolateRgbBasis([
+              '#313695', // Deep blue
+              '#4575b4', // Blue
+              '#74add1', // Light blue
+              '#abd9e9', // Very light blue
+              '#e0f3f8', // Pale blue
+              '#ffffbf', // Pale yellow
+              '#fee090', // Light yellow
+              '#fdae61', // Light orange
+              '#f46d43', // Orange
+              '#d73027', // Red
+              '#a50026'  // Deep red
+            ]));
+
+          // Get the RGB values from the color scale
+          const rgb = d3.rgb(colorScale(normalizedValue));
           
-          // Find the color stops to interpolate between
-          let lowIndex = 0;
-          for (let i = 1; i < colors.length; i++) {
-            if (normalizedValue <= colors[i][0]) {
-              break;
-            }
-            lowIndex = i - 1;
-          }
-          
-          const lowStop = colors[lowIndex];
-          const highStop = colors[lowIndex + 1] || colors[lowIndex];
-          
-          // Calculate interpolation factor
-          const factor = (normalizedValue - lowStop[0]) / (highStop[0] - lowStop[0]);
-          
-          // Interpolate between colors
-          return [
-            Math.round(lowStop[1][0] + (highStop[1][0] - lowStop[1][0]) * factor),
-            Math.round(lowStop[1][1] + (highStop[1][1] - lowStop[1][1]) * factor),
-            Math.round(lowStop[1][2] + (highStop[1][2] - lowStop[1][2]) * factor)
-          ];
+          return [rgb.r, rgb.g, rgb.b];
         };
 
         // Process image data with vertical flip
